@@ -1,0 +1,9 @@
+{
+  "port": 4170,
+  "dataDir": "D:/Nikke Datamine/mpkparser/jsons",
+  "mpksDir": "D:/Nikke Datamine/mpkparser/mpks",
+  "typesFile": "D:/Nikke Datamine/mpkparser/customTypes.txt",
+  "waveSpawnDir": "D:/Nikke Datamine/nikke-downloader/wavedata-json",
+  "localeDir": "D:/Nikke Datamine/nikke-downloader/json-locale",
+  "language": "en"
+}

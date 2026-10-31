@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nikke Library</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">N</span> Nikke Library</div>
+    <nav class="nav">
+      <a class="nav-item active" data-section="stories" href="#/">Stories</a>
+      <a class="nav-item" data-section="stages" href="#/stages">Stages</a>
+      <a class="nav-item" data-section="raids" href="#/raids">Raids</a>
+      <a class="nav-item" data-section="minigames" href="#/minigame/tts">Minigames</a>
+      <a class="nav-item" data-section="progression" href="#/progression/outpost">Progression</a>
+      <a class="nav-item" data-section="jukebox" href="#/jukebox">Jukebox</a>
+      <a class="nav-item" data-section="characters" href="#/characters">Characters</a>
+    </nav>
+    <span id="locale-status" class="pill"></span>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div id="cat-tabs" class="cat-tabs"></div>
+      <input id="filter" class="filter" type="search" placeholder="Filter groups or scenes…" autocomplete="off">
+      <div id="tree" class="tree"></div>
+    </aside>
+
+    <main id="reader" class="reader">
+      <div class="empty">
+        <h1>Story Reader</h1>
+        <p>Pick a chapter, event or episode from the left to start reading.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script src="stages.js"></script>
+  <script src="raids.js"></script>
+  <script src="characters.js"></script>
+  <script src="jukebox.js"></script>
+  <script src="minigames.js"></script>
+  <script src="minigames-extra.js"></script>
+  <script src="progression.js"></script>
+</body>
+</html>
