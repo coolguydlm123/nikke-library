@@ -6,13 +6,11 @@ const Raids = (() => {
     kind: store.get('raidKind', 'union'), // 'union' | 'solo' | 'intercept' | 'museum'
     current: null,
   };
-  const fmt = (n) => Number(n).toLocaleString('en-US');
   const KINDS = ['union', 'solo', 'intercept', 'museum'];
   const seasonal = (kind) => kind === 'union' || kind === 'solo';
   const href = (kind, boss, season) => (seasonal(kind) ? `#/raid/${kind}/${season}/${boss}` : `#/raid/${kind}/${boss}`);
   const levelRange = (b) => (b.lvMin === b.lvMax ? `Lv ${b.lvMin}` : `Lv ${b.lvMin}–${b.lvMax}`);
   const diffTag = (d) => (d === 'Normal' ? '' : `<span class="tag diff-${d.toLowerCase()}">${d.toUpperCase()}</span>`);
-  const range = (lo, hi) => (lo === hi ? fmt(lo) : `${fmt(lo)} → ${fmt(hi)}`);
   const gradeClass = (g) => `grade-${String(g || '').toLowerCase()}`;
 
   async function enter() {
@@ -95,39 +93,46 @@ const Raids = (() => {
 
   const rewardList = (reward) => !reward ? '<span class="key">—</span>'
     : [...(reward.userExp ? [{ name: 'Commander EXP', amount: reward.userExp }] : []), ...reward.items]
-      .map((i) => `${esc(i.name)} <span class="reward-amt">×${fmt(i.amount)}</span>${i.chance < 100 ? ` <span class="chance">${+i.chance.toFixed(2)}%</span>` : ''}`).join('<br>');
+      .map((i) => `<div>${esc(i.name)} <span class="reward-amt">×${fmtNum(i.amount)}</span>${i.chance < 100 ? ` <span class="chance">${fmtPct(i.chance, 2)}</span>` : ''}${boxToggle(i)}</div>`).join('');
 
-  // Enemy roster with stats at the lowest and highest tier that uses this wave.
+  // Enemy roster. When the wave is used at several tiers, stats show at the lowest
+  // and highest of them, each in its own column.
   function rosterRange(b) {
     const targets = new Set(b.targets.map((t) => t.id));
-    return `<div class="table-scroll"><table class="roster"><thead><tr><th>Enemy</th><th>Grade</th><th>Element</th>
-      <th class="num">HP</th><th class="num">ATK</th><th class="num">DEF</th></tr></thead><tbody>
+    const two = b.lvHi !== b.lvLo;
+    const statHead = (lv) => ['HP', 'ATK', 'DEF'].map((s) => `<th class="num">${s}${two ? ` <span class="key">Lv ${lv}</span>` : ''}</th>`).join('');
+    const statCells = (st) => `<td class="num">${fmtShort(st.hp)}</td><td class="num">${fmtShort(st.atk)}</td><td class="num">${fmtShort(st.def)}</td>`;
+    return `<div class="table-scroll"><table class="roster keep-cols sticky-first"><thead><tr><th>Enemy</th><th>Grade</th><th>Element</th>
+      ${statHead(b.lvLo)}${two ? statHead(b.lvHi) : ''}</tr></thead><tbody>
       ${[...b.enemies].sort((x, y) => (y.statsHi?.hp ?? 0) - (x.statsHi?.hp ?? 0)).map((e) => `<tr class="${targets.has(e.id) ? 'is-target' : ''}">
-        <td><div class="roster-name">${gameImg('icons-monster', e.art, `roster-art${targets.has(e.id) ? ' big' : ''}`)}<span>${esc(e.name)}${targets.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</span></div></td>
+        <td><div class="roster-name">${gameImg('icons-monster', e.art, 'roster-art')}<span>${esc(e.name)}${targets.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</span></div></td>
         <td><span class="grade ${gradeClass(e.grade)}">${esc(e.grade || '—')}</span></td><td>${esc((e.element || []).join(', ') || '—')}</td>
-        ${e.stats ? `<td class="num">${range(e.stats.hp, e.statsHi.hp)}</td><td class="num">${range(e.stats.atk, e.statsHi.atk)}</td><td class="num">${range(e.stats.def, e.statsHi.def)}</td>`
-          : '<td class="num key" colspan="3">no stat data</td>'}</tr>`).join('')}
+        ${e.stats ? statCells(e.stats) + (two ? statCells(e.statsHi) : '')
+          : `<td class="num key" colspan="${two ? 6 : 3}">no stat data</td>`}</tr>`).join('')}
       </tbody></table></div>`;
   }
 
   // HP stages: each step's HP is its damage window; the boss's level (and stats)
   // can rise as steps pass. Steps where the level goes up are marked.
   function hpStagesTable(stages, { rewards = false } = {}) {
-    return `<div class="table-scroll"><table class="roster keep-cols tier-table hp-stages"><thead><tr>
-      <th class="num">Stage</th><th class="num">Damage dealt</th><th class="num">Stage HP</th><th class="num">Lv</th><th class="num">ATK</th><th class="num">DEF</th>
-      ${rewards ? '<th>Rewards</th>' : ''}</tr></thead><tbody>
+    const bonusCols = rewards ? Math.max(0, ...stages.map((s) => (s.bonus || []).length)) : 0;
+    return `<div class="table-scroll"><table class="roster keep-cols sticky-first hp-stages"><thead><tr>
+      <th class="num">Stage</th><th class="num">From dmg</th><th class="num">Stage HP</th><th class="num">Lv</th><th class="num">ATK</th><th class="num">DEF</th>
+      ${rewards ? `<th>Rewards</th>${Array.from({ length: bonusCols }, (_, i) => `<th>Bonus${bonusCols > 1 ? ` ${i + 1}` : ''}</th>`).join('')}` : ''}</tr></thead><tbody>
       ${stages.map((s, i) => {
         const up = i > 0 && s.lv > stages[i - 1].lv;
-        return `<tr><td class="num"><b>${s.step}</b></td>
-          <td class="num">${fmt(s.from)} – ${s.to != null ? fmt(s.to) : '∞'}</td>
-          <td class="num">${s.hp != null ? `<b>${fmt(s.hp)}</b>` : '<span class="key">no limit</span>'}</td>
+        return `<tr><td class="num">${s.step}</td>
+          <td class="num">${fmtShort(s.from)}</td>
+          <td class="num">${s.hp != null ? fmtShort(s.hp) : '∞'}</td>
           <td class="num">${s.lv}${up ? ' <span class="lv-up" title="Boss level rises at this stage">▲</span>' : ''}</td>
-          <td class="num">${s.atk != null ? fmt(s.atk) : '—'}</td><td class="num">${s.def != null ? fmt(s.def) : '—'}</td>
-          ${rewards ? `<td class="obtain">${rewardList(s.reward)}${(s.bonus || []).filter(Boolean).map((b) =>
-            `<div class="bonus-line"><span class="tag bonus">BONUS</span> ${rewardList(b)}</div>`).join('')}</td>` : ''}</tr>`;
+          <td class="num">${fmtShort(s.atk)}</td><td class="num">${fmtShort(s.def)}</td>
+          ${rewards ? `<td class="obtain">${rewardList(s.reward)}</td>${Array.from({ length: bonusCols }, (_, j) =>
+            `<td class="obtain">${rewardList(s.bonus?.[j])}</td>`).join('')}` : ''}</tr>`;
       }).join('')}
       </tbody></table></div>`;
   }
+  const hpNote = (rewards) => `<p class="key note">From dmg is the total damage at which the stage starts; Stage HP is the damage needed to clear it (∞ = last stage, no limit).
+    ATK and DEF are the target's stats at the stage's level; ▲ marks a level rise.${rewards ? ' Bonus rewards are extra drops for reaching the same stage; percentages are drop chances.' : ''}</p>`;
 
   const wavesHtml = (b) => b.waves.map((w, i) => `<div class="wave"><span class="wave-n">${i + 1}</span><div class="enemies">${w.map((e) => `
     <span class="enemy ${gradeClass(e.grade)}">${e.element?.length ? `<span class="elem elem-${esc(e.element[0].toLowerCase())}"></span>` : ''}
@@ -140,23 +145,22 @@ const Raids = (() => {
     const sections = x.difficulties.map((d) => {
       const hasRewards = d.tiers.some((t) => t.rewards.length);
       const rewardLabels = [...new Set(d.tiers.flatMap((t) => t.rewards.map((w) => w.label)))];
-      const tierTable = `<div class="table-scroll"><table class="roster keep-cols tier-table"><thead><tr>
+      const tierTable = `<div class="table-scroll"><table class="roster keep-cols sticky-first tier-table"><thead><tr>
           <th class="num">${tl}</th><th class="num">Lv</th><th class="num">Target HP</th><th class="num">ATK</th><th class="num">DEF</th>
           ${hasRewards ? rewardLabels.map((l) => `<th>${l === 'Clear' ? 'Rewards' : `${esc(l)} rewards`}</th>`).join('') : ''}</tr></thead><tbody>
-        ${d.tiers.map((t) => `<tr><td class="num"><b>${t.tier}</b></td><td class="num">${t.lv}</td>
-          ${t.target?.stats ? `<td class="num">${fmt(t.target.stats.hp)}</td><td class="num">${fmt(t.target.stats.atk)}</td><td class="num">${fmt(t.target.stats.def)}</td>` : '<td class="num key" colspan="3">—</td>'}
+        ${d.tiers.map((t) => `<tr><td class="num">${t.tier}</td><td class="num">${t.lv}</td>
+          ${t.target?.stats ? `<td class="num">${fmtShort(t.target.stats.hp)}</td><td class="num">${fmtShort(t.target.stats.atk)}</td><td class="num">${fmtShort(t.target.stats.def)}</td>` : '<td class="num key" colspan="3">—</td>'}
           ${hasRewards ? rewardLabels.map((l) => `<td class="obtain">${rewardList(t.rewards.find((w) => w.label === l)?.reward)}</td>`).join('') : ''}</tr>`).join('')}
         </tbody></table></div>`;
       const battles = d.battles.filter((w) => w.battle).map((w) => {
         const b = w.battle;
         const label = d.battles.length > 1 ? ` <span class="sub">${tl}s ${w.tiers.join(', ')}</span>` : '';
-        const time = `${Math.floor(b.battleTime / 60)}:${String(b.battleTime % 60).padStart(2, '0')}`;
-        return `<div class="subhead">Enemies${label} <span class="key">· ${esc(b.theme)} · ${time} limit · stats from Lv ${b.lvLo}${b.lvHi !== b.lvLo ? ` to Lv ${b.lvHi}` : ''}</span></div>
+        return `<div class="subhead">Enemies${label} <span class="key">· ${esc(b.theme)} · ${fmtDur(b.battleTime)} limit</span></div>
           ${rosterRange(b)}
           <details class="waves-toggle"><summary>Waves (${b.waves.length})</summary>${wavesHtml(b)}</details>`;
       }).join('');
       const hpStages = d.hpStages.map((set) => `<div class="subhead">HP stages <span class="key">· ${tl} ${set.tiers.join(', ')} · ${set.stages.length} stages</span></div>
-        ${hpStagesTable(set.stages)}`).join('');
+        ${hpStagesTable(set.stages)}${hpNote(false)}`).join('');
       return `<section class="card diff-section"><h3>${diffTag(d.difficulty) || '<span class="tag diff-normal">NORMAL</span>'}
           <span class="sub">${d.tiers.length} ${tl.toLowerCase()}${d.tiers.length > 1 ? 's' : ''}</span></h3>
         ${tierTable}${hpStages}${battles}</section>`;
@@ -168,8 +172,8 @@ const Raids = (() => {
   function damageTable(rows, title) {
     if (!rows.length) return '';
     return `<section class="card"><h3>${esc(title)} <span class="sub">${rows.length}</span></h3>
-      <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Damage dealt</th><th>Rewards</th></tr></thead><tbody>
-      ${rows.map((x) => `<tr><td class="num" style="text-align:left">${fmt(x.min)}${x.max ? ` – ${fmt(x.max)}` : '+'}</td><td class="obtain">${rewardList(x.reward)}</td></tr>`).join('')}
+      <div class="table-scroll"><table class="roster keep-cols sticky-first"><thead><tr><th class="num">From dmg</th><th class="num">To dmg</th><th>Rewards</th></tr></thead><tbody>
+      ${rows.map((x) => `<tr><td class="num">${fmtShort(x.min)}</td><td class="num">${x.max ? fmtShort(x.max) : '∞'}</td><td class="obtain">${rewardList(x.reward)}</td></tr>`).join('')}
       </tbody></table></div></section>`;
   }
 
@@ -181,8 +185,7 @@ const Raids = (() => {
         ${Stages.fieldCard(x.battle)}
         ${x.hpStages ? `<section class="card"><h3>HP stages <span class="sub">${x.hpStages.length}</span></h3>
           ${hpStagesTable(x.hpStages, { rewards: x.hpStages.some((s) => s.reward || s.bonus?.some(Boolean)) })}
-          <p class="key note">Stage HP is the damage needed to clear that stage. ATK and DEF are the target's stats at the stage's level.
-          Bonus rewards are extra drops for reaching the same stage; percentages are drop chances.</p></section>` : ''}
+          ${hpNote(x.hpStages.some((s) => s.bonus?.some(Boolean)))}</section>` : ''}
         ${Stages.battleCards(x.battle, x.lv)}
         ${damageTable(x.damageRewards, 'Damage rewards')}
         ${x.extraRewards.map((rows, i) => damageTable(rows, x.extraRewards.length > 1 ? `Bonus rewards ${i + 1}` : 'Bonus rewards')).join('')}
@@ -195,11 +198,11 @@ const Raids = (() => {
     const desc = sr ? null : '';
     const modes = x.modes.map((m) => `
       <section class="card diff-section"><h3>${esc(m.mode)} <span class="sub">Lv ${m.lv}${m.characterLv ? ` · Nikke Lv ${m.characterLv}` : ''}</span></h3>
-        ${m.hpStages ? `<div class="subhead">HP stages <span class="key">· ${m.hpStages.length} stages</span></div>${hpStagesTable(m.hpStages)}` : ''}
+        ${m.hpStages ? `<div class="subhead">HP stages <span class="key">· ${m.hpStages.length} stages</span></div>${hpStagesTable(m.hpStages)}${hpNote(false)}` : ''}
         ${m.battle ? `<div class="subhead">Enemies</div>${rosterRange({ ...m.battle, lvLo: m.lv, lvHi: m.lv, enemies: m.battle.enemies.map((e) => ({ ...e, statsHi: e.stats })) })}
           <details class="waves-toggle"><summary>Waves (${m.battle.waves.length})</summary>${wavesHtml(m.battle)}</details>` : ''}
-        ${m.missions.length ? `<div class="subhead">Missions</div><div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Mission</th><th>Rewards</th></tr></thead><tbody>
-          ${m.missions.map((ms) => `<tr><td>${esc(ms.description)}${ms.rankingPoints ? ` <span class="key">· ${fmt(ms.rankingPoints)} ranking pts</span>` : ''}</td><td class="obtain">${rewardList(ms.reward)}</td></tr>`).join('')}
+        ${m.missions.length ? `<div class="subhead">Missions</div><div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Mission</th><th class="num">Ranking pts</th><th>Rewards</th></tr></thead><tbody>
+          ${m.missions.map((ms) => `<tr><td>${esc(ms.description)}</td><td class="num">${ms.rankingPoints ? fmtNum(ms.rankingPoints) : '—'}</td><td class="obtain">${rewardList(ms.reward)}</td></tr>`).join('')}
           </tbody></table></div>` : ''}
       </section>`).join('');
     $('#reader').innerHTML = head([x.kindLabel, x.group], esc(x.boss.name), desc,

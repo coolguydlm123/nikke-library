@@ -6,7 +6,7 @@ const MinigameExtras = (() => {
   const x = { dice: null, adv: null, play: null, events: null, eg: {}, egt: {} };
   const rewardList = (reward) => !reward ? '<span class="key">—</span>'
     : [...(reward.userExp ? [{ name: 'Commander EXP', amount: reward.userExp }] : []), ...reward.items]
-      .map((i) => `${esc(i.name)} <span class="reward-amt">×${fmt(i.amount)}</span>${i.chance < 100 ? ` <span class="chance">${+i.chance.toFixed(2)}%</span>` : ''}`).join('<br>');
+      .map((i) => `<div>${esc(i.name)} <span class="reward-amt">×${fmt(i.amount)}</span>${i.chance < 100 ? ` <span class="chance">${fmtPct(i.chance, 2)}</span>` : ''}${boxToggle(i)}</div>`).join('');
   const head = (crumb, title, desc, extra = '') => `<div class="scene-head">
       <div class="crumb">${crumb.map(esc).join(' · ')}</div><div class="scene-title">${title}</div>
       ${desc ? `<p class="album-desc">${esc(desc)}</p>` : ''}${extra}</div>`;
@@ -61,7 +61,7 @@ const MinigameExtras = (() => {
         </dl></section>
         ${poolKinds.map((s) => `<section class="card"><h3>${esc(s.name)} odds</h3>
           <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">Chance</th><th>Reward</th></tr></thead><tbody>
-          ${s.pool.map((p) => `<tr><td class="num">${+p.chance.toFixed(2)}%</td><td class="obtain">${rewardList(p.reward)}</td></tr>`).join('')}
+          ${s.pool.map((p) => `<tr><td class="num">${fmtPct(p.chance, 2)}</td><td class="obtain">${rewardList(p.reward)}</td></tr>`).join('')}
           </tbody></table></div></section>`).join('')}
       </div>`;
   }
@@ -360,12 +360,12 @@ const MinigameExtras = (() => {
   // A cell is text or a number, or { img }, { reward }, { scene, label }.
   function egCell(v, col) {
     if (v == null || v === '') return '';
-    if (typeof v === 'number') return `<span class="num">${/(^|_)(id|group)(_|$)/i.test(col.key) ? v : fmt(v)}</span>`;
+    if (typeof v === 'number') return /(^|_)(id|group)(_|$)/i.test(col.key) ? String(v) : fmtShort(v);
     if (typeof v !== 'object') {
       const text = String(v).replace(/<\/?(color|b|i|size)\b[^>]*>/g, ''); // Unity rich-text tags
       return `<span class="${text.length > 60 ? 'eg-long' : ''}">${esc(text).replace(/\n/g, '<br>')}</span>`;
     }
-    if (v.img) return `${gameImg('icons-event', v.img, 'eg-img')}<div class="key">${esc(v.img)}</div>`;
+    if (v.img) return `<span class="eg-icon">${gameImg('icons-event', v.img, 'eg-img')}<span class="key">${esc(v.img)}</span></span>`;
     if (v.reward) return rewardList(v.reward);
     if (v.scene) return `<a href="#/scene/${encodeURIComponent(v.scene)}">${esc(v.label)}</a>`;
     return esc(JSON.stringify(v));
@@ -374,11 +374,14 @@ const MinigameExtras = (() => {
   // ---- Viewer pages (lib/eventgames/<id>.js): sections of text, facts, tables, galleries ----
   // A value is text, a number, an array (one per line), or { img, caption, size }, { reward },
   // { scene, label }, { page, label }, { b }, { key }, { text, sub }, { tag, tone }.
-  function vCell(v, g) {
+  function vCell(v, g, short) {
     if (v == null || v === '' || v === false) return '';
     if (v === true) return '✓';
-    if (typeof v === 'number') return fmt(v);
-    if (typeof v !== 'object') return esc(String(v)).replace(/\n/g, '<br>');
+    if (typeof v === 'number') return short ? fmtShort(v) : fmtNum(v);
+    if (typeof v !== 'object') {
+      const t = esc(String(v)).replace(/\n/g, '<br>');
+      return String(v).length > 60 ? `<span class="eg-long">${t}</span>` : t; // long text keeps a readable width in tables
+    }
     if (Array.isArray(v)) {
       // Pictures side by side, anything else one per line.
       if (v.length && v.every((c) => c && c.img !== undefined)) return `<div class="v-row">${v.map((c) => vCell(c, g)).join('')}</div>`;
@@ -386,12 +389,12 @@ const MinigameExtras = (() => {
     }
     if (v.img !== undefined) {
       return v.img ? `<figure class="v-fig">${gameImg('icons-event', v.img, `v-img ${v.size || ''}`)}${v.caption ? `<figcaption>${esc(v.caption)}</figcaption>` : ''}</figure>`
-        : (v.caption ? esc(v.caption) : '');
+        : (v.caption ? `<span class="v-cap">${esc(v.caption)}</span>` : ''); // picture not extracted
     }
     if (v.reward !== undefined) return rewardList(v.reward);
     if (v.scene) return `<a href="#/scene/${encodeURIComponent(v.scene)}">${esc(v.label || v.scene)}</a>`;
     if (v.page) return `<a href="${egBase}/${g.id}/p/${encodeURIComponent(v.page)}">${esc(v.label || v.page)}</a>`;
-    if (v.b != null) return `<b>${vCell(v.b, g)}</b>`;
+    if (v.b != null) return `<b>${vCell(v.b, g, short)}</b>`;
     if (v.key != null) return `<span class="key">${esc(String(v.key))}</span>`;
     if (v.tag != null) return `<span class="v-tag ${v.tone || ''}">${esc(String(v.tag))}</span>`;
     if (v.text != null) return `${vCell(v.text, g)}${v.sub ? `<div class="key">${vCell(v.sub, g)}</div>` : ''}`;
@@ -413,11 +416,13 @@ const MinigameExtras = (() => {
         ${gameImg('icons-event', i.img, 'v-img')}<figcaption>${vCell(i.caption, g)}</figcaption></figure>`).join('')}</div></section>`;
     }
     if (s.type === 'table') {
+      // Page patterns: compact rows, sticky name column on wide tables, the explanation under the table.
       const cols = s.columns.map((c) => (typeof c === 'string' ? { label: c } : c));
-      return `<section class="card eg-card">${h}${note}<div class="table-scroll"><table class="roster keep-cols eg-table v-table">
-        <thead><tr>${cols.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
-        <tbody>${s.rows.map((r) => `<tr>${r.map((v, j) => `<td class="${cols[j]?.num ? 'num' : ''}">${vCell(v, g)}</td>`).join('')}</tr>`).join('')}</tbody>
-        </table></div></section>`;
+      const cls = (c) => (c?.num ? ' class="num"' : '');
+      return `<section class="card eg-card">${h}<div class="table-scroll"><table class="roster keep-cols eg-table v-table${cols.length > 4 ? ' sticky-first' : ''}">
+        <thead><tr>${cols.map((c) => `<th${cls(c)}>${esc(c.label)}</th>`).join('')}</tr></thead>
+        <tbody>${s.rows.map((r) => `<tr>${r.map((v, j) => `<td${cls(cols[j])}>${vCell(v, g, cols[j]?.num)}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table></div>${s.note ? `<p class="key note">${esc(s.note)}</p>` : ''}</section>`;
     }
     return '';
   }
@@ -445,9 +450,12 @@ const MinigameExtras = (() => {
         ${t.columns.map((c, j) => (r[j] === '' ? '' : `<dt>${esc(c.label)}</dt><dd>${egCell(r[j], c)}</dd>`)).join('')}</dl></section>`).join('')}</div>`;
     }
     const rows = all ? t.rows : t.rows.slice(0, ROW_LIMIT);
-    return title + `<div class="stage-body"><section class="card eg-card"><div class="table-scroll"><table class="roster keep-cols eg-table">
-      <thead><tr>${t.columns.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map((r) => `<tr>${r.map((v, j) => `<td>${egCell(v, t.columns[j])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    // A column is a number column when every filled cell in it is a number.
+    const numCol = t.columns.map((c, j) => rows.some((r) => typeof r[j] === 'number') && rows.every((r) => r[j] === '' || r[j] == null || typeof r[j] === 'number'));
+    const cls = (j) => (numCol[j] ? ' class="num"' : '');
+    return title + `<div class="stage-body"><section class="card eg-card"><div class="table-scroll"><table class="roster keep-cols eg-table${t.columns.length > 4 ? ' sticky-first' : ''}">
+      <thead><tr>${t.columns.map((c, j) => `<th${cls(j)}>${esc(c.label)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map((r) => `<tr>${r.map((v, j) => `<td${cls(j)}>${egCell(v, t.columns[j])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
       ${rows.length < t.rows.length ? `<button class="nav-btn" id="eg-all">Show all ${fmt(t.rows.length)} rows</button>` : ''}</section></div>`;
   }
 

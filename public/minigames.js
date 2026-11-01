@@ -16,10 +16,18 @@ const Minigames = (() => {
   // One tab per minigame; tabs are links so each game has its own address.
   function renderTabs() {
     const game = gameOf(location.hash);
-    $('#cat-tabs').innerHTML = Object.entries(m.games).filter(([, g]) => g).map(([id, g]) =>
-      `<a class="cat-tab ${game === id ? 'active' : ''}" href="#/minigame/${id}">${esc(g.name)}<span class="n">${g.count}</span></a>`).join('');
+    const games = Object.entries(m.games).filter(([, g]) => g);
+    // On a phone the 34 tabs become one drop-down (style.css hides whichever doesn't fit).
+    const opt = ([id, g]) => `<option value="${id}" ${game === id ? 'selected' : ''}>${esc(g.name)}</option>`;
+    const main = games.filter(([id]) => MAIN_GAMES.includes(id));
+    $('#cat-tabs').innerHTML = games.map(([id, g]) =>
+      `<a class="cat-tab ${game === id ? 'active' : ''}" href="#/minigame/${id}">${esc(g.name)}<span class="n">${g.count}</span></a>`).join('')
+      + `<select class="mg-pick" aria-label="Minigame"><optgroup label="Minigames">${main.map(opt).join('')}</optgroup>
+        <optgroup label="Event minigames">${games.filter(([id]) => !MAIN_GAMES.includes(id)).map(opt).join('')}</optgroup></select>`;
+    $('#cat-tabs .mg-pick').onchange = (e) => { location.hash = `#/minigame/${e.target.value}`; };
     $('#cat-tabs .cat-tab.active')?.scrollIntoView({ block: 'nearest' }); // the tab list scrolls (one tab per game)
   }
+  const MAIN_GAMES = ['tts', 'dicetrack', 'textadv'];
   const gameOf = (hash) => hash.match(/^#\/minigame\/(\w+)/)?.[1] || 'tts';
 
   // Song filter: matches title, artist or album name.
@@ -168,7 +176,7 @@ const Minigames = (() => {
 
   function rewardText(r) {
     if (!r) return '<span class="key">—</span>';
-    return r.items.map((i) => `${esc(i.name)} <span class="reward-amt">×${fmt(i.amount)}</span>`).join('<br>');
+    return r.items.map((i) => `<div>${esc(i.name)} <span class="reward-amt">×${fmt(i.amount)}</span>${boxToggle(i)}</div>`).join('');
   }
 
   function missionsPage() {
@@ -176,9 +184,9 @@ const Minigames = (() => {
     $('#reader').innerHTML = head([m.tts.name], 'Missions', `<p class="album-desc">${m.missions.length} missions.</p>`) + `
       <div class="stage-body">${groups.filter(([, list]) => list.length).map(([label, list]) => `
         <section class="card"><h3>${label} <span class="sub">${list.length}</span></h3>
-          <div class="table-scroll"><table class="roster"><thead><tr><th>Mission</th><th>Reward</th></tr></thead><tbody>
-          ${list.map((x) => `<tr><td><div class="track-name">${esc(x.name)}</div><div class="key">${esc(x.description)}</div>
-              ${x.start || x.end ? `<div class="key">${day(x.start) || '…'} → ${day(x.end) || '…'}</div>` : ''}</td>
+          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Mission</th>${label === 'Limited-time' ? '<th>Period</th>' : ''}<th>Reward</th></tr></thead><tbody>
+          ${list.map((x) => `<tr><td><div class="track-name">${esc(x.name)}</div><div class="key">${esc(x.description)}</div></td>
+            ${label === 'Limited-time' ? `<td class="mg-period">${day(x.start) || '…'} → ${day(x.end) || '…'}</td>` : ''}
             <td class="obtain">${rewardText(x.reward)}</td></tr>`).join('')}
           </tbody></table></div></section>`).join('')}</div>`;
   }

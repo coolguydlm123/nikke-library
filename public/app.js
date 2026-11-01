@@ -19,6 +19,23 @@ const gameImg = (family, name, cls = '') => (name
   ? `<img class="${cls}" src="img/${family}/${esc(String(name).toLowerCase())}.${family === 'scenariobackground' ? 'jpg' : 'webp'}" alt="" loading="lazy" onerror="this.remove()">`
   : '');
 
+// Compact values for tables (README "Page patterns"): every section formats numbers the same way.
+const fmtNum = (n) => (n == null || n === '' ? '—' : Number(n).toLocaleString('en-US'));
+// 1,234,567 -> "1.23M" with the exact value on hover; below 10,000 stays exact.
+const fmtShort = (n) => {
+  if (n == null || n === '') return '—';
+  const v = Number(n), a = Math.abs(v);
+  const [d, u] = a >= 1e9 ? [1e9, 'B'] : a >= 1e6 ? [1e6, 'M'] : a >= 1e4 ? [1e3, 'K'] : [1, ''];
+  return u ? `<span title="${fmtNum(v)}">${+(v / d).toFixed(v / d >= 100 ? 0 : 2)}${u}</span>` : fmtNum(v);
+};
+const fmtPct = (v, digits = 1) => (v == null ? '—' : `${+Number(v).toFixed(digits)}%`);
+// Seconds -> "45s", "12m 30s", "3h 05m", "2d 4h".
+const fmtDur = (s) => {
+  if (s == null) return '—';
+  const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60, sec = Math.round(s % 60);
+  return d ? `${d}d ${h}h` : h ? `${h}h ${String(m).padStart(2, '0')}m` : m ? `${m}m${sec ? ` ${sec}s` : ''}` : `${sec}s`;
+};
+
 // A minigame's in-game "how to play" pages.
 function helpHtml(help) {
   return `<div class="stage-body">${help.map((h) => `<section class="card"><h3>${esc(h.title)}</h3>
@@ -31,6 +48,78 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('nl.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('nl.' + k, JSON.stringify(v)); } catch {} },
 };
+
+// Random box contents, for any page that lists rewards. boxToggle(reward) is an expandable
+// "Contents" block for a reward with a `box` (ItemRandomTable group, from rewardInfo in
+// lib/stages.js); it loads /api/box when opened. Equipment is grouped by tier and slot,
+// merged or split by manufacturer (one toggle for every box).
+const boxView = { cache: new Map(), split: store.get('boxSplit', false) };
+const boxToggle = (r) => (r?.box ? `<details class="box" data-box="${r.box}"><summary>Contents</summary></details>` : '');
+const fmtChance = (c) => `${c >= 10 ? +c.toFixed(1) : +c.toPrecision(2)}%`;
+
+function boxHtml(b) {
+  const amt = (e) => `×${e.min === e.max ? fmtNum(e.min) : `${fmtNum(e.min)}–${fmtNum(e.max)}`}`;
+  const table = (head, rows) => `<div class="table-scroll"><table class="roster keep-cols box-table"><thead><tr>${head}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  const gear = new Map();
+  const corps = new Set();
+  for (const e of b.entries) {
+    if (!e.equip) continue;
+    for (const [corp, share] of Object.entries(e.equip.corps)) {
+      corps.add(corp);
+      const key = `${e.equip.tier}|${e.equip.slot}|${boxView.split ? corp : ''}`;
+      const g = gear.get(key) || { ...e.equip, corp, min: e.min, max: e.max, chance: 0, classes: new Set() };
+      g.chance += e.chance * share;
+      g.classes.add(e.equip.cls);
+      gear.set(key, g);
+    }
+  }
+  const SLOTS = ['Head', 'Body', 'Arm', 'Leg'];
+  const CORPS = ['ELYSION', 'MISSILIS', 'TETRA', 'PILGRIM', 'ABNORMAL', 'NONE'];
+  const corpName = (c) => b.corpNames[c] || c;
+  const corpOrder = (c) => (CORPS.includes(c) ? CORPS.indexOf(c) : CORPS.length);
+  // Split: one block per manufacturer (heading row with its total), gear by tier and slot inside.
+  const gearList = [...gear.values()]
+    .sort((x, y) => (boxView.split ? corpOrder(x.corp) - corpOrder(y.corp) : 0)
+      || parseInt(y.tier.slice(1)) - parseInt(x.tier.slice(1)) || SLOTS.indexOf(x.slot) - SLOTS.indexOf(y.slot));
+  const gearAmt = gearList.some((g) => g.min !== 1 || g.max !== 1);
+  const cols = 2 + (gearAmt ? 1 : 0);
+  const corpTotal = (c) => gearList.reduce((n, g) => n + (g.corp === c ? g.chance : 0), 0);
+  const gearRows = gearList.map((g, i) => (boxView.split && g.corp !== gearList[i - 1]?.corp
+    ? `<tr class="box-group"><td colspan="${cols}">${esc(corpName(g.corp))}</td><td class="num">${fmtChance(corpTotal(g.corp))}</td></tr>` : '')
+    + `<tr><td>${esc(g.tier)} ${esc(g.slot)}</td><td>${g.classes.has('All') || g.classes.size === 3 ? 'Any' : esc([...g.classes].join(' / '))}</td>
+        ${gearAmt ? `<td class="num">${amt(g)}</td>` : ''}<td class="num">${fmtChance(g.chance)}</td></tr>`);
+  const items = b.entries.filter((e) => !e.equip);
+  return `<div class="box-list">
+    ${items.length ? table('<th>Item</th><th class="num">Amount</th><th class="num">Chance</th>', items.map((e) =>
+      `<tr><td>${esc(e.name)}${boxToggle(e)}</td><td class="num">${amt(e)}</td><td class="num">${fmtChance(e.chance)}</td></tr>`)) : ''}
+    ${gearList.length ? `<div class="box-sub">Equipment <span class="box-note">${[...corps].map(corpName).map(esc).join(', ')}</span>
+      ${corps.size > 1 ? `<button class="box-split ${boxView.split ? 'active' : ''}">By manufacturer</button>` : ''}</div>
+      ${table(`<th>Gear</th><th>Class</th>${gearAmt ? '<th class="num">Amount</th>' : ''}<th class="num">Chance</th>`, gearRows)}` : ''}
+  </div>`;
+}
+
+document.addEventListener('toggle', async (e) => {
+  const d = e.target;
+  if (!d.matches?.('details.box') || !d.open || d.dataset.loaded) return;
+  d.dataset.loaded = '1';
+  const id = Number(d.dataset.box);
+  if (!boxView.cache.has(id)) {
+    const res = await apiFetch(`/api/box?id=${id}`);
+    boxView.cache.set(id, res.ok ? await res.json() : null);
+  }
+  const b = boxView.cache.get(id);
+  d.insertAdjacentHTML('beforeend', `<div class="box-body">${b ? boxHtml(b) : '<p class="key">Contents unavailable.</p>'}</div>`);
+}, true);
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.box-split')) return;
+  boxView.split = !boxView.split;
+  store.set('boxSplit', boxView.split);
+  document.querySelectorAll('details.box[data-loaded] > .box-body').forEach((body) => {
+    const b = boxView.cache.get(Number(body.parentElement.dataset.box));
+    if (b) body.innerHTML = boxHtml(b);
+  });
+});
 
 const state = {
   catalogue: [],
@@ -70,9 +159,13 @@ async function init() {
     else if (section === 'characters') Characters.renderTree();
     else if (section === 'minigames') { Minigames.renderTree(); Minigames.rerender(); }
     else if (section === 'progression') Progression.renderTree();
+    else if (section === 'monsters') { Monsters.renderTree(); Monsters.route(); }
     else if (section === 'jukebox') { Jukebox.renderTree(); Jukebox.rerender(); }
     else renderTree();
   });
+  // Phones: the sidebar folds into a "Browse" bar; picking something folds it again.
+  $('#browse-toggle').onclick = () => setBrowse(!$('.sidebar').classList.contains('open'));
+  $('#tree').addEventListener('click', (e) => { if (e.target.closest('a')) setBrowse(false); });
   window.addEventListener('hashchange', dispatch);
   dispatch();
 }
@@ -80,10 +173,16 @@ async function init() {
 // Top-level sections share the sidebar (#cat-tabs, #filter, #tree) and #reader.
 let section = null;
 
+function setBrowse(open) {
+  $('.sidebar').classList.toggle('open', open);
+  $('#browse-toggle').setAttribute('aria-expanded', String(open));
+}
+
 function enterSection(name) {
   if (section === name) return false;
   section = name;
   document.querySelectorAll('.nav-item[data-section]').forEach((a) => a.classList.toggle('active', a.dataset.section === name));
+  $('#browse-toggle').firstChild.textContent = `Browse ${SECTIONS.find((s) => s.id === name)?.title || ''} `;
   state.filter = '';
   $('#filter').value = '';
   $('#filter').placeholder = {
@@ -92,11 +191,42 @@ function enterSection(name) {
     raids: 'Filter seasons or bosses…',
     characters: 'Filter name, class, weapon, element…',
     minigames: 'Filter songs, artists or albums…',
+    monsters: 'Filter name, code, element, grade…',
   }[name] || 'Filter groups or scenes…';
   return true;
 }
 
+// The home page: one card per section (the only way to switch sections on a phone besides
+// the scrolling top menu).
+const SECTIONS = [
+  { id: 'stories', href: '#/stories', title: 'Stories', text: 'Main story, events, side stories, bond episodes and counseling, with a game-style view.' },
+  { id: 'stages', href: '#/stages', title: 'Stages', text: 'Campaign chapters and towers: enemies, waves, rewards.' },
+  { id: 'raids', href: '#/raids', title: 'Raids', text: 'Union Raid, Solo Raid, Interception and Museum bosses.' },
+  { id: 'monsters', href: '#/monsters', title: 'Monsters', text: 'Every Rapture: art, element, grade and where it appears.' },
+  { id: 'characters', href: '#/characters', title: 'Characters', text: 'Nikke profiles, costumes and the CP calculator.' },
+  { id: 'minigames', href: '#/minigame/tts', title: 'Minigames', text: 'Tracing the Stars, VOLT TRIP, Fading Affection and every event minigame.' },
+  { id: 'progression', href: '#/progression/outpost', title: 'Progression', text: 'Outpost, simulation room and level costs.' },
+  { id: 'jukebox', href: '#/jukebox', title: 'Jukebox', text: 'Albums and tracks, and the story scenes that play them.' },
+];
+
+function renderHome() {
+  const stories = state.catalogue.reduce((n, c) => n + c.groups.reduce((s, g) => s + g.scenes.length, 0), 0);
+  $('#reader').innerHTML = `<div class="home">
+    <h1>Nikke Library</h1>
+    <p class="home-sub">A datamine library of NIKKE: pick a section.</p>
+    <div class="home-grid">${SECTIONS.map((s) => `<a class="home-card" href="${s.href}">
+      <b>${esc(s.title)}</b>${s.id === 'stories' ? ` <span class="n">${stories.toLocaleString('en-US')} scenes</span>` : ''}
+      <span>${esc(s.text)}</span></a>`).join('')}</div>
+  </div>`;
+}
+
 async function dispatch() {
+  document.body.classList.toggle('at-home', !location.hash || location.hash === '#/' || location.hash === '#');
+  setBrowse(false);
+  if (document.body.classList.contains('at-home')) {
+    enterSection('home');
+    return renderHome();
+  }
   if (/^#\/stage/.test(location.hash)) {
     if (enterSection('stages')) await Stages.enter();
     return Stages.route();
@@ -116,6 +246,10 @@ async function dispatch() {
   if (/^#\/raid/.test(location.hash)) {
     if (enterSection('raids')) await Raids.enter();
     return Raids.route();
+  }
+  if (/^#\/monster/.test(location.hash)) {
+    if (enterSection('monsters')) await Monsters.enter();
+    return Monsters.route();
   }
   if (/^#\/jukebox/.test(location.hash)) {
     if (enterSection('jukebox')) await Jukebox.enter();

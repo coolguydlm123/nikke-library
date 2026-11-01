@@ -60,7 +60,10 @@ const Characters = (() => {
     const list = c.list.filter((x) => byRarity(x) && byWeapon(x) && match(x));
     const corps = [...new Set(list.map((x) => x.corporation))]
       .sort((a, b) => (CORP_ORDER.indexOf(a) + 1 || 99) - (CORP_ORDER.indexOf(b) + 1 || 99));
-    $('#tree').innerHTML = corps.map((corp) => {
+    const onOverload = location.hash.startsWith('#/character/overload');
+    $('#tree').innerHTML = `<details class="group" open><summary>Gear</summary>
+        <a class="scene-link ${onOverload ? 'active' : ''}" href="#/character/overload"><span>Overload gear</span><span class="lines">effects, chances, costs</span></a>
+      </details>` + (corps.map((corp) => {
       const members = list.filter((x) => x.corporation === corp);
       return `<details class="group" open><summary>${esc(corp)}<span class="count">${members.length}</span></summary>
         ${members.map((x) => `<a class="scene-link char-link ${c.current?.code === x.code ? 'active' : ''}" href="${href(x.code)}">
@@ -68,11 +71,12 @@ const Characters = (() => {
           ${x.element[0] ? `<span class="elem elem-${esc(x.element[0].toLowerCase())}" title="${esc(x.element.join(', '))}"></span>` : ''}
           <span>${esc(x.name)}${x.hasFavorite ? ' <span class="fav-mark" title="Has a favorite item">★</span>' : ''}</span><span class="lines">${esc(x.weapon || '')} · ${esc(x.burst)}</span></a>`).join('')}
       </details>`;
-    }).join('') || '<p class="key" style="padding:12px">No matches.</p>';
+    }).join('') || '<p class="key" style="padding:12px">No matches.</p>');
     $('#tree .scene-link.active')?.scrollIntoView({ block: 'nearest' });
   }
 
   async function route() {
+    if (location.hash.startsWith('#/character/overload')) { c.current = null; renderTree(); return overloadPage(); }
     const m = location.hash.match(/^#\/character\/(\d+)/);
     if (!m) { c.current = null; renderTree(); return overview(); }
     const res = await apiFetch('/api/character?code=' + m[1]);
@@ -87,9 +91,66 @@ const Characters = (() => {
     const count = (r) => c.list.filter((x) => x.rarity === r).length;
     $('#reader').innerHTML = `<div class="empty"><h1>Characters</h1>
       <p>${c.list.length} Nikkes: ${count('SSR')} SSR, ${count('SR')} SR, ${count('R')} R.</p>
-      <p>Pick a Nikke for skills, weapon and stories.</p></div>
+      <p>Pick a Nikke for skills, weapon and stories.</p>
+      <p><a href="#/character/overload">Overload gear →</a> what modified gear lines can roll, the chances and the costs.</p></div>
       <div class="char-gallery">${c.list.filter((x) => x.icon).map((x) => `<a href="${href(x.code)}" title="${esc(x.name)}">
         ${gameImg('icons-char', x.icon)}<span>${esc(x.name)}</span></a>`).join('')}</div>`;
+  }
+
+  // ---------- Overload gear ----------
+  // What a modified (overload) gear line can roll: /api/overload from EquipmentOptionTable,
+  // EquipmentOptionCostTable and ItemEquipTable's option slots.
+  async function overloadPage() {
+    if (!c.overload) c.overload = await (await apiFetch('/api/overload')).json();
+    const o = c.overload;
+    if (!o) { $('#reader').innerHTML = '<div class="error">No overload gear data.</div>'; return; }
+    const tiers = o.types[0].tiers;
+    const showBp = !!c.overloadBp;
+    const range = (t) => `Lv ${t.levels[0].level}–${t.levels[t.levels.length - 1].level}`;
+    // Costs: one item per cell (×N); Custom Lock is the one-time alternative, by lock level.
+    const count = (list, item) => { const k = list.find((x) => x.item === item); return k ? `×${fmtNum(k.count)}` : '—'; };
+    const moduleName = o.costs.modify[0]?.cost[0]?.item || 'Custom Module';
+    const lockName = o.costs.lock.flatMap((r) => r.lock)[0]?.cost[0]?.item || 'Custom Lock';
+    const lockLevels = [...new Set(o.costs.lock.flatMap((r) => r.lock.map((l) => l.level)))];
+    const costRows = [['Modify gear', o.costs.modify], ['Change Effects', o.costs.change], ['Lock Effect', o.costs.lock]]
+      .flatMap(([name, rows]) => rows.map((r, i) => `<tr><td style="white-space:nowrap">${i ? '' : esc(name)}</td><td class="num">${r.level}</td><td class="num">${count(r.cost, moduleName)}</td>
+        ${lockLevels.map((lv) => { const l = r.lock.find((x) => x.level === lv); return `<td class="num">${l ? count(l.cost, lockName) : '—'}</td>`; }).join('')}</tr>`)).join('');
+
+    $('#reader').innerHTML = `
+      <div class="scene-head">
+        <div class="crumb">Characters · Gear</div>
+        <div class="scene-title">Overload gear</div>
+        <div class="toolbar"><span class="badge">${esc(o.gearRarity)} gear</span><span class="badge">${o.types.length} effects</span><span class="badge">Lv 1–${tiers.reduce((n, t) => n + t.levels.length, 0)}</span></div>
+      </div>
+      <div class="stage-body">
+        <section class="card"><h3>How lines roll</h3>
+          <dl class="facts">
+            ${o.slots.map((ch, i) => `<dt>Line ${i + 1}</dt><dd>${fmtPct(ch)} chance of an effect</dd>`).join('')}
+            <dt>Tier</dt><dd>${tiers.map((t, i) => `${i + 1} (${range(t)}) ${fmtPct(t.chance)}`).join(' · ')}</dd>
+          </dl>
+          <p class="key note">Modifying ${esc(o.gearRarity)} gear swaps its manufacturer effect for up to ${o.slots.length} random lines. Each line picks an effect (Roll % below), then a tier. The data has no chance per level inside a tier; hover a value for its chance per line if those levels are equally likely.</p>
+        </section>
+        <section class="card"><h3>Effects by level</h3>
+          <label class="toggle"><input type="checkbox" id="ol-bp" ${showBp ? 'checked' : ''}> Battle power instead of values</label>
+          <div class="table-scroll"><table class="roster sticky-first keep-cols">
+            <thead><tr><th rowspan="2">Effect</th><th class="num" rowspan="2">Roll %</th>
+              ${tiers.map((t, i) => `<th class="num" colspan="${t.levels.length}">Tier ${i + 1} · ${fmtPct(t.chance)}</th>`).join('')}</tr>
+              <tr>${tiers.flatMap((t) => t.levels.map((l) => `<th class="num">${l.level}</th>`)).join('')}</tr></thead>
+            <tbody>${o.types.map((t) => `<tr><td style="white-space:nowrap">${esc(t.name.replace(/^Increased /, ''))}</td><td class="num">${fmtPct(t.chance)}</td>
+              ${t.tiers.flatMap((tier) => tier.levels.map((l) => `<td class="num" title="Lv ${l.level}: ${l.value}% · ${fmtNum(l.bp)} BP · ${fmtPct((t.chance * tier.chance) / 100 / tier.levels.length, 2)} per line">${showBp ? fmtNum(l.bp) : l.value}</td>`)).join('')}</tr>`).join('')}
+            </tbody></table></div>
+          <p class="key note">${showBp ? 'Battle power per level, what the CP calculator on each Nikke\'s page adds up.' : 'Values in % by level.'} Hit Rate and Charge Speed are stored negative (tighter spread, shorter charge).</p>
+        </section>
+        <section class="card"><h3>Costs</h3>
+          <div class="table-scroll"><table class="roster keep-cols">
+            <thead><tr><th rowspan="2">Action</th><th class="num" rowspan="2">Level</th><th class="num" rowspan="2">${esc(moduleName)}</th>
+              ${lockLevels.length ? `<th class="num" colspan="${lockLevels.length}">or ${esc(lockName)}, by lock level</th>` : ''}</tr>
+              <tr>${lockLevels.map((lv) => `<th class="num">${lv}</th>`).join('')}</tr></thead>
+            <tbody>${costRows}</tbody></table></div>
+          <p class="key note">EquipmentOptionCostTable numbers each cost level but doesn't say what raises it (most likely how many effects are already locked). ${esc(lockName)} locks an effect once.</p>
+        </section>
+      </div>`;
+    $('#ol-bp').onchange = (e) => { c.overloadBp = e.target.checked; overloadPage(); };
   }
 
   // With the favorite item toggle on, slots it replaces (1 = Skill 1, 2 = Skill 2, 3 = Burst) use its skills.
@@ -142,11 +203,15 @@ const Characters = (() => {
         <label>ATK ${num('atk', v.atk, 0)}</label><label>HP ${num('hp', v.hp, 0)}</label><label>DEF ${num('def', v.def, 0)}</label>
         <label>Skill 1 ${num('s1', v.s1, 1, 10)}</label><label>Skill 2 ${num('s2', v.s2, 1, 10)}</label><label>Burst ${num('burst', v.burst, 1, 10)}</label>
       </div>
-      <div class="subhead">Overload lines</div>
-      <div class="cp-ol">${v.ol.map((l, i) => `<div class="cp-ol-line"><span class="key">${['Head', 'Body', 'Arm', 'Leg'][Math.floor(i / 3)]} ${i % 3 + 1}</span>
-        <select class="cp-ol-type" data-i="${i}"><option value="none" ${l.type === 'none' ? 'selected' : ''}>—</option>
-          <option value="other" ${l.type === 'other' ? 'selected' : ''}>Stat line</option><option value="elemental" ${l.type === 'elemental' ? 'selected' : ''}>Elemental dmg</option></select>
-        <input type="number" class="cp-ol-lv" data-i="${i}" value="${l.lv}" min="1" max="15" ${l.type === 'none' ? 'disabled' : ''}></div>`).join('')}</div>
+      <div class="subhead">Overload lines <a class="key" href="#/character/overload">effects and values →</a></div>
+      <div class="table-scroll"><table class="roster keep-cols cp-ol">
+        <thead><tr><th>Gear</th>${[1, 2, 3].map((n) => `<th>Line ${n}</th><th class="num">Lv</th>`).join('')}</tr></thead>
+        <tbody>${['Head', 'Body', 'Arm', 'Leg'].map((gear, g) => `<tr><td>${gear}</td>${v.ol.slice(g * 3, g * 3 + 3).map((l, k) => { const i = g * 3 + k; return `
+          <td><select class="cp-ol-type" data-i="${i}"><option value="none" ${l.type === 'none' ? 'selected' : ''}>—</option>
+            <option value="other" ${l.type === 'other' ? 'selected' : ''}>Stat</option><option value="elemental" ${l.type === 'elemental' ? 'selected' : ''}>Elemental</option></select></td>
+          <td class="num"><input type="number" class="cp-ol-lv" data-i="${i}" value="${l.lv}" min="1" max="15" ${l.type === 'none' ? 'disabled' : ''}></td>`; }).join('')}</tr>`).join('')}
+        </tbody></table></div>
+      <p class="key note">Stat = any line but elemental damage (they share one BP scale).</p>
       <div class="cp-grid">
         <label>Harmony Cube <select class="cp-in" data-k="cube"><option value="">None</option>
           ${d.cubes.map((k) => `<option value="${k.id}" ${String(v.cube) === String(k.id) ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>
@@ -196,6 +261,19 @@ const Characters = (() => {
     refresh();
   }
 
+  // Weapon stats as [label, value] rows; the in-game ammo / reload / fire rate / range ratings follow.
+  function weaponStats(w) {
+    const t = w.typeInfo || {};
+    return [
+      ['Type', `${esc(w.typeName)} (${esc(w.type)})`], ['Attack', esc(w.attackType)], ['Control', esc(w.control)],
+      ['Damage', fmtPct(w.damage, 2)], ...(w.pellets > 1 ? [['Pellets', fmtNum(w.pellets)]] : []),
+      ['Ammo', fmtNum(w.ammo)], ['Reload', `${w.reload}s`], ['Core damage', fmtPct(w.coreDamage, 2)],
+      ...(w.charge ? [['Charge time', `${w.charge.time}s`], ['Full charge damage', fmtPct(w.charge.fullDamage, 2)], ['Full charge burst', fmtPct(w.charge.fullBurst, 2)]] : []),
+      ['Burst / shot', fmtPct(w.burstPerShot, 4)], ['Burst / shot on target', fmtPct(w.burstPerShotTarget, 4)],
+      ...[['Ammo rating', t.ammo], ['Reload rating', t.reload], ['Fire rate rating', t.fireRate], ['Range rating', t.range]].filter(([, v]) => v).map(([k, v]) => [k, esc(v)]),
+    ];
+  }
+
   function renderCharacter() {
     const x = c.current;
     const badge = (text, cls = '') => `<span class="badge ${cls}">${text}</span>`;
@@ -221,30 +299,17 @@ const Characters = (() => {
           <dl class="facts">
             ${x.squad ? `<dt>Squad</dt><dd>${esc(x.squad.name)}${x.squad.info ? `<div class="key">${esc(x.squad.info)}</div>` : ''}</dd>` : ''}
             <dt>Manufacturer</dt><dd>${esc(x.corporation)}${x.overspec ? ' · Overspec' : ''}</dd>
-            <dt>Critical</dt><dd>${x.critical.rate}% rate · ${x.critical.damage}% damage</dd>
+            <dt>Crit rate</dt><dd>${fmtPct(x.critical.rate)}</dd>
+            <dt>Crit damage</dt><dd>${fmtPct(x.critical.damage)}</dd>
           </dl></div></div>
         </section>
         ${w ? `<section class="card"><h3>Weapon</h3>
-          <div class="skill-name">${esc(w.name)} <span class="key">${esc(w.typeName)} (${esc(w.type)}) · ${esc(w.attackType)}</span></div>
-          <div class="stat-grid weapon-grid">
-            <div><span class="key">Weapon type</span><b>${esc(w.type)}</b></div>
-            <div><span class="key">Control</span><b>${esc(w.control)}</b></div>
-            <div><span class="key">Damage</span><b>${w.damage}%</b></div>
-            ${w.pellets > 1 ? `<div><span class="key">Pellets</span><b>${w.pellets}</b></div>` : ''}
-            <div><span class="key">Ammo</span><b>${w.ammo}</b></div>
-            <div><span class="key">Reload</span><b>${w.reload}s</b></div>
-            <div><span class="key">Burst / shot</span><b>${+w.burstPerShot.toFixed(4)}%</b></div>
-            <div><span class="key">Burst / shot on target</span><b>${+w.burstPerShotTarget.toFixed(4)}%</b></div>
-            ${w.charge ? `<div><span class="key">Charge time</span><b>${w.charge.time}s</b></div>
-              <div><span class="key">Full charge damage</span><b>${w.charge.fullDamage}%</b></div>
-              <div><span class="key">Full charge burst</span><b>${w.charge.fullBurst}%</b></div>` : ''}
-            <div><span class="key">Core damage</span><b>${w.coreDamage}%</b></div>
-          </div>
+          <div class="skill-name">${esc(w.name)}</div>
+          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Stat</th><th class="num">Value</th></tr></thead><tbody>
+            ${weaponStats(w).map(([k, v]) => `<tr><td>${k}</td><td class="num">${v}</td></tr>`).join('')}
+          </tbody></table></div>
           <div class="skill-desc">${richText(w.description)}</div>
-          ${w.typeInfo ? `<div class="weapon-type-info"><b>${esc(w.typeName)}</b> · ${esc(w.typeInfo.description)}
-            <div class="key">${[['Ammo', w.typeInfo.ammo], ['Reload', w.typeInfo.reload], ['Fire rate', w.typeInfo.fireRate], ['Range', w.typeInfo.range]]
-              .filter(([, v]) => v).map(([k, v]) => `${k}: ${esc(v)}`).join(' · ')}</div></div>` : ''}
-          <p class="key note">Burst gauge per shot as stored ÷ 10,000; "on target" is the value when the shot hits the target.</p></section>` : ''}
+          <p class="key note">${w.typeInfo ? `${esc(w.typeName)}: ${esc(w.typeInfo.description)} ` : ''}Burst gauge per shot as stored ÷ 10,000; "on target" is when the shot hits the target.</p></section>` : ''}
         <section class="card"><h3>Skills</h3>
           <label class="level-pick">Skill level <input type="range" id="skill-lv" min="1" max="10" value="${Math.min(c.skillLevel, 10)}">
             <b id="skill-lv-n">${Math.min(c.skillLevel, 10)}</b></label>

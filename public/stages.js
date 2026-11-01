@@ -121,12 +121,6 @@ const Stages = (() => {
 
   const gradeClass = (g) => `grade-${String(g || '').toLowerCase()}`;
 
-  function enemyChip(e) {
-    return `<span class="enemy ${gradeClass(e.grade)}">
-      ${e.element?.length ? `<span class="elem elem-${esc(e.element[0].toLowerCase())}" title="${esc(e.element.join(', '))}"></span>` : ''}
-      ${gameImg('icons-monster', e.art, 'enemy-art')}<span class="enemy-name">${esc(e.name)}</span>${e.count > 1 ? `<span class="x">×${e.count}</span>` : ''}${spawnTime(e)}</span>`;
-  }
-
   // First–last spawn time of an enemy within its wave (from the wave's spawn list).
   function spawnTime(e) {
     if (e.from == null) return '';
@@ -134,14 +128,14 @@ const Stages = (() => {
     return `<span class="spawn-t" title="Spawn time">${e.from === e.to ? t(e.from) : `${t(e.from)}–${t(e.to)}`}</span>`;
   }
   window.spawnTime = spawnTime;
+  const spawnRange = (e) => (e.from == null ? '—' : e.from === e.to ? +e.from.toFixed(1) : `${+e.from.toFixed(1)}–${+e.to.toFixed(1)}`);
 
   // Cards shared by stage, floor and raid pages.
   function fieldCard(b) {
     if (!b) return '';
-    const time = `${Math.floor(b.battleTime / 60)}:${String(b.battleTime % 60).padStart(2, '0')}`;
     return `<section class="card"><h3>Field</h3><dl class="facts">
       <dt>Mode</dt><dd>${esc(b.mode)}</dd>
-      <dt>Time limit</dt><dd>${time}</dd>
+      <dt>Time limit</dt><dd>${fmtDur(b.battleTime)}</dd>
       <dt>Theme</dt><dd>${esc(b.theme)} · ${esc(b.themeTime)}</dd>
       <dt>Background</dt><dd class="key">${esc(b.background)}</dd>
     </dl></section>`;
@@ -152,19 +146,25 @@ const Stages = (() => {
     if (!b) return `<section class="card"><h3>Waves</h3><p class="key">No wave data for this stage.</p></section>`;
     const targetIds = new Set(b.targets.map((t) => t.id));
     return `<section class="card"><h3>Enemy roster <span class="sub">${b.enemies.length}</span></h3>
-        <div class="table-scroll"><table class="roster"><thead><tr><th>Enemy</th><th>Grade</th><th>Element</th>
+        <div class="table-scroll"><table class="roster keep-cols sticky-first"><thead><tr><th>Enemy</th><th>Grade</th><th>Element</th>
           <th class="num">HP</th><th class="num">ATK</th><th class="num">DEF</th></tr></thead><tbody>
         ${[...b.enemies].sort((x, y) => (y.stats?.hp ?? 0) - (x.stats?.hp ?? 0)).map((e) => `<tr class="${targetIds.has(e.id) ? 'is-target' : ''}">
-          <td><div class="roster-name">${gameImg('icons-monster', e.art, `roster-art${targetIds.has(e.id) ? ' big' : ''}`)}<span>${esc(e.name)}${targetIds.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</span></div></td><td><span class="grade ${gradeClass(e.grade)}">${esc(e.grade || '—')}</span></td>
+          <td><div class="roster-name">${gameImg('icons-monster', e.art, 'roster-art')}<span>${esc(e.name)}${targetIds.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</span></div></td><td><span class="grade ${gradeClass(e.grade)}">${esc(e.grade || '—')}</span></td>
           <td>${esc((e.element || []).join(', ') || '—')}</td>
-          ${e.stats ? `<td class="num">${fmt(e.stats.hp)}</td><td class="num">${fmt(e.stats.atk)}</td><td class="num">${fmt(e.stats.def)}</td>`
-            : '<td class="num key" colspan="3">no stat data</td>'}</tr>`).join('')}
+          ${e.stats ? `<td class="num">${fmtShort(e.stats.hp)}</td><td class="num">${fmtShort(e.stats.atk)}</td><td class="num">${fmtShort(e.stats.def)}</td>`
+            : '<td class="num">—</td><td class="num">—</td><td class="num">—</td>'}</tr>`).join('')}
         </tbody></table></div>
-        <p class="key note">Stats at stage level ${lv}: stat group value × monster ratio ÷ 10000.</p></section>
+        <p class="key note">Stats at stage level ${lv}: stat group value × monster ratio ÷ 10000. Hover a short value for the exact number.</p></section>
       <section class="card"><h3>Waves <span class="sub">${b.waves.length}</span>${b.repeat ? ' <span class="tag">REPEATS</span>' : ''}</h3>
-        ${b.waves.map((w, i) => `<div class="wave"><span class="wave-n">${i + 1}</span><div class="enemies">${w.map(enemyChip).join('')}</div>
-          <span class="wave-total">${w.reduce((n, e) => n + e.count, 0)}</span></div>`).join('') || '<p class="key">No wave data.</p>'}
-        <p class="key note">${b.spawnData ? 'Counts and spawn times from each wave’s spawn list (core wavedata bundles).'
+        ${b.waves.length ? `<div class="table-scroll"><table class="roster keep-cols wave-table"><thead><tr><th class="num">Wave</th><th>Enemy</th>
+          <th class="num">Count</th><th class="num">Spawn (s)</th><th class="num">Wave total</th></tr></thead><tbody>
+          ${b.waves.map((w, i) => w.map((e, j) => `<tr class="${j ? '' : 'wave-start'}${i % 2 ? ' wave-odd' : ''}">
+            <td class="num">${j ? '' : i + 1}</td>
+            <td><div class="roster-name">${gameImg('icons-monster', e.art, 'wave-art')}<span>${esc(e.name)}</span></div></td>
+            <td class="num">×${e.count}</td><td class="num">${spawnRange(e)}</td>
+            <td class="num">${j ? '' : w.reduce((n, x) => n + x.count, 0)}</td></tr>`).join('')).join('')}
+          </tbody></table></div>` : '<p class="key">No wave data.</p>'}
+        <p class="key note">${b.spawnData ? 'Counts and spawn times (first–last, seconds) from each wave’s spawn list (core wavedata bundles).'
           : 'No spawn list for some waves: counts there are enemy slots, not spawns.'}</p>
       </section>`;
   }
@@ -172,9 +172,11 @@ const Stages = (() => {
   function rewardCard(r, title = 'Rewards') {
     if (!r) return '';
     const items = [...(r.userExp ? [{ name: 'Commander EXP', amount: r.userExp, chance: 100 }] : []), ...r.items];
-    return `<section class="card"><h3>${esc(title)}</h3><div class="rewards">${items.map((x) => `
-      <div class="reward"><span class="reward-name">${esc(x.name)}</span><span class="reward-amt">×${fmt(x.amount)}</span>
-      ${x.chance < 100 ? `<span class="chance">${+x.chance.toFixed(2)}%</span>` : ''}</div>`).join('')}</div></section>`;
+    return `<section class="card"><h3>${esc(title)}</h3><div class="table-scroll"><table class="roster keep-cols">
+      <thead><tr><th>Reward</th><th class="num">Amount</th><th class="num">Chance</th></tr></thead><tbody>${items.map((x) => `
+      <tr><td>${esc(x.name)}</td><td class="num">×${fmtNum(x.amount)}</td><td class="num">${fmtPct(x.chance, 2)}</td></tr>
+      ${x.box ? `<tr class="box-of"><td colspan="3">${boxToggle(x)}</td></tr>` : ''}`).join('')}
+      </tbody></table></div></section>`;
   }
 
   function renderStage() {

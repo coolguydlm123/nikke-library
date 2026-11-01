@@ -2,7 +2,6 @@
 const Jukebox = (() => {
   const j = { albums: null, current: null, open: new Set() };
   const href = (id) => `#/jukebox/${id}`;
-  const duration = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   const trackHit = (t, f) => !f || t.name.toLowerCase().includes(f) || t.artist.toLowerCase().includes(f);
 
   async function enter() {
@@ -56,23 +55,24 @@ const Jukebox = (() => {
         <div class="scene-title">${esc(a.name)}</div>
         ${a.description ? `<p class="album-desc">${esc(a.description)}</p>` : ''}
         <div class="toolbar">
-          <span class="badge">${a.tracks.length} tracks</span><span class="badge">${duration(total)}</span>
+          <span class="badge">${a.tracks.length} tracks</span><span class="badge">${fmtDur(total)}</span>
           <span class="spacer"></span>${nav(j.albums[idx - 1], '← Prev')}${nav(j.albums[idx + 1], 'Next →')}
         </div>
       </div>
-      <div class="stage-body"><section class="card"><div class="table-scroll"><table class="roster tracks keep-cols">
-        <thead><tr><th class="num">#</th><th>Title</th><th>Obtain</th><th class="num">Length</th><th class="num">Story</th></tr></thead>
-        <tbody>${a.tracks.map((t, i) => `
+      <div class="stage-body"><section class="card"><div class="table-scroll"><table class="roster sticky-first keep-cols tracks">
+        <thead><tr><th>Title</th><th>Artist</th><th>Obtain</th><th class="num">Length</th><th class="num">Scenes</th><th>BGM key</th></tr></thead>
+        <tbody>${a.tracks.map((t) => `
           <tr class="${f && trackHit(t, f) ? 'is-target' : ''}">
-            <td class="num key">${i + 1}</td>
-            <td><div class="track-name">${esc(t.name)}${t.loop ? ' <span class="tag">LOOP</span>' : ''}</div>
-              <div class="key">${esc(t.artist)} · ${esc(t.bgm)}</div></td>
-            <td class="obtain">${esc(t.obtain)}</td>
-            <td class="num">${duration(t.length)}</td>
-            <td class="num">${t.sceneCount ? `<button class="scene-toggle" data-bgm="${esc(t.bgm)}">${t.sceneCount} scene${t.sceneCount > 1 ? 's' : ''}</button>` : '<span class="key">—</span>'}</td>
+            <td class="track-name">${esc(t.name)}${t.loop ? ' <span class="tag">LOOP</span>' : ''}</td>
+            <td>${esc(t.artist)}</td>
+            <td title="${esc(t.obtain)}">${esc(t.source)}</td>
+            <td class="num">${fmtDur(t.length)}</td>
+            <td class="num">${t.sceneCount ? `<button class="scene-toggle" data-bgm="${esc(t.bgm)}">${t.sceneCount}</button>` : '—'}</td>
+            <td class="key">${esc(t.bgm)}</td>
           </tr>
-          <tr class="scene-row" data-for="${esc(t.bgm)}" hidden><td></td><td colspan="4"><div class="scene-chips"></div></td></tr>`).join('')}
-        </tbody></table></div></section></div>`;
+          <tr class="scene-row" data-for="${esc(t.bgm)}" hidden><td colspan="6"><div class="scene-chips"></div></td></tr>`).join('')}
+        </tbody></table></div>
+        <p class="note key">Obtain: hover for the game's full text. Scenes: story scenes that play the track; click to list them.</p></section></div>`;
 
     $('#reader').querySelectorAll('.scene-toggle').forEach((b) => b.onclick = () => toggleScenes(b.dataset.bgm));
   }

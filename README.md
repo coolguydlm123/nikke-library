@@ -39,3 +39,22 @@ npm run deploy   # pushes dist/ to the gh-pages branch (one fresh commit each ti
 - `build-static.js`, `deploy.js`: static export and publish
 - `tools/web-images.py`: resized copies of the extracted images
 - `lib/eventgames/`: one viewer per event minigame (rules, stages, characters, rewards); see its README.md. Check one with `node tools/check-eventgame.js <id>`
+
+## Page patterns
+
+Every section follows the same layout so a lot of information fits on one screen, on a desktop or a phone.
+
+- **Page:** `head` block (`.scene-head`: crumb, `.scene-title`, one-line description), then `.stage-body` with `.card` sections, each with an `<h3>` title.
+- **Short key/value lists:** `<dl class="facts">`.
+- **Anything with more than ~4 rows or 2 columns:** a table, always `<div class="table-scroll"><table class="roster keep-cols">`.
+  - Number columns get `class="num"` on both `th` and `td`.
+  - Wide tables add `sticky-first` so the name column stays while the rest scrolls sideways.
+  - One row per thing, one value per cell. No paragraphs in cells; put explanations in a `.note` under the table.
+- **Values** (helpers in `public/app.js`):
+  - `fmtNum(n)` → "12,345"
+  - `fmtShort(n)` → "1.23M" with the exact value on hover; use it in dense tables
+  - `fmtPct(v)` → "12.5%"
+  - `fmtDur(seconds)` → "3h 05m"
+  - "—" for nothing; ×N for amounts; no units repeated in every cell when the header already has them ("ATK %", "Time (s)").
+- **Images in tables:** small icons (32–48 px) next to the name, never on their own row.
+- **Phones:** the top menu scrolls sideways and the sidebar folds into a "Browse" bar; tables scroll sideways inside `.table-scroll` rather than wrapping.
