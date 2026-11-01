@@ -2,3 +2,4 @@ node_modules/
 dist/
 .pages-test/
 .pages.git/
+public/img/

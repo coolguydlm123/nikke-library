@@ -124,7 +124,7 @@ const Stages = (() => {
   function enemyChip(e) {
     return `<span class="enemy ${gradeClass(e.grade)}">
       ${e.element?.length ? `<span class="elem elem-${esc(e.element[0].toLowerCase())}" title="${esc(e.element.join(', '))}"></span>` : ''}
-      <span class="enemy-name">${esc(e.name)}</span>${e.count > 1 ? `<span class="x">×${e.count}</span>` : ''}${spawnTime(e)}</span>`;
+      ${gameImg('icons-monster', e.art, 'enemy-art')}<span class="enemy-name">${esc(e.name)}</span>${e.count > 1 ? `<span class="x">×${e.count}</span>` : ''}${spawnTime(e)}</span>`;
   }
 
   // First–last spawn time of an enemy within its wave (from the wave's spawn list).
@@ -155,7 +155,7 @@ const Stages = (() => {
         <div class="table-scroll"><table class="roster"><thead><tr><th>Enemy</th><th>Grade</th><th>Element</th>
           <th class="num">HP</th><th class="num">ATK</th><th class="num">DEF</th></tr></thead><tbody>
         ${[...b.enemies].sort((x, y) => (y.stats?.hp ?? 0) - (x.stats?.hp ?? 0)).map((e) => `<tr class="${targetIds.has(e.id) ? 'is-target' : ''}">
-          <td>${esc(e.name)}${targetIds.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</td><td><span class="grade ${gradeClass(e.grade)}">${esc(e.grade || '—')}</span></td>
+          <td><div class="roster-name">${gameImg('icons-monster', e.art, `roster-art${targetIds.has(e.id) ? ' big' : ''}`)}<span>${esc(e.name)}${targetIds.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</span></div></td><td><span class="grade ${gradeClass(e.grade)}">${esc(e.grade || '—')}</span></td>
           <td>${esc((e.element || []).join(', ') || '—')}</td>
           ${e.stats ? `<td class="num">${fmt(e.stats.hp)}</td><td class="num">${fmt(e.stats.atk)}</td><td class="num">${fmt(e.stats.def)}</td>`
             : '<td class="num key" colspan="3">no stat data</td>'}</tr>`).join('')}

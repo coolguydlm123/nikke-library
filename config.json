@@ -5,5 +5,6 @@
   "typesFile": "D:/Nikke Datamine/mpkparser/customTypes.txt",
   "waveSpawnDir": "D:/Nikke Datamine/nikke-downloader/wavedata-json",
   "localeDir": "D:/Nikke Datamine/nikke-downloader/json-locale",
-  "language": "en"
+  "language": "en",
+  "imageDir": "D:/Nikke Datamine/nikke-downloader/image"
 }

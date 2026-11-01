@@ -1,9 +1,9 @@
 // Nikke Library — VOLT TRIP (Dice Track), Fading Affection (Text Adventure Plus)
-// and SD Lobby, shown as extra tabs of the Minigames section.
+// and the other event minigames, shown as extra tabs of the Minigames section.
 const MinigameExtras = (() => {
   const fmt = (n) => Number(n).toLocaleString('en-US');
   const day = (iso) => (iso ? String(iso).slice(0, 10) : null);
-  const x = { dice: null, adv: null, lobby: null, play: null };
+  const x = { dice: null, adv: null, play: null, events: null, eg: {}, egt: {} };
   const rewardList = (reward) => !reward ? '<span class="key">—</span>'
     : [...(reward.userExp ? [{ name: 'Commander EXP', amount: reward.userExp }] : []), ...reward.items]
       .map((i) => `${esc(i.name)} <span class="reward-amt">×${fmt(i.amount)}</span>${i.chance < 100 ? ` <span class="chance">${+i.chance.toFixed(2)}%</span>` : ''}`).join('<br>');
@@ -16,7 +16,7 @@ const MinigameExtras = (() => {
   async function load(kind) {
     if (kind === 'dicetrack' && !x.dice) x.dice = await (await apiFetch('/api/dicetrack')).json();
     if (kind === 'textadv' && !x.adv) x.adv = await (await apiFetch('/api/textadv')).json();
-    if (kind === 'sdlobby' && !x.lobby) x.lobby = await (await apiFetch('/api/sdlobby')).json();
+    if (!x.events) x.events = await (await apiFetch('/api/eventgames')).json();
   }
 
   // ---------- VOLT TRIP ----------
@@ -123,7 +123,8 @@ const MinigameExtras = (() => {
     const s = seen();
     return `<details class="group" open><summary>${esc(a.name)}</summary>
       ${link('#/minigame/textadv/endings', 'Endings', `${a.routes.reduce((n, r) => n + r.endings.filter((e) => s.has(e.page)).length, 0)}/${a.routes.reduce((n, r) => n + r.endings.length, 0)}`, page === 'endings')}
-      ${link('#/minigame/textadv/items', 'Loot items', a.items.length, page === 'items')}</details>
+      ${link('#/minigame/textadv/items', 'Loot items', a.items.length, page === 'items')}
+      ${a.help?.length ? link('#/minigame/textadv/help', 'How to play', a.help.length, page === 'help') : ''}</details>
       <details class="group" open><summary>Play a route</summary>
       ${a.routes.map((r) => link(`#/minigame/textadv/route/${r.id}`, esc(r.name), r.unlock ? `from ${day(r.unlock.value)}` : '', page === 'route' && routeId === r.id)).join('')}
       </details>`;
@@ -132,7 +133,7 @@ const MinigameExtras = (() => {
   // A fresh run of a route.
   function newRun(route) {
     const st = x.adv.stats;
-    return { route: route.id, page: null, hp: st.hp.start, food: st.food.start, erosion: route.startCorruption || 0, items: owned(), log: [], notice: null };
+    return { route: route.id, page: null, hp: st.hp.start, food: st.food.start, erosion: route.startCorruption || 0, items: owned(), log: [], notice: null, image: null };
   }
 
   const ignoreReq = () => store.get('textadvIgnoreReq', false);
@@ -152,6 +153,7 @@ const MinigameExtras = (() => {
     run.page = pageId;
     run.notice = null;
     if (!p) return;
+    if (p.image) run.image = p.image; // a scene picture stays up until the next one
     if (p.loot && !run.items.includes(p.loot)) { run.items.push(p.loot); addItem(p.loot); run.notice = `Obtained ${itemName(p.loot)} (kept for future runs)`; }
     if (p.ending) markSeen(p.id);
   }
@@ -169,6 +171,10 @@ const MinigameExtras = (() => {
     else if (route.corruption && run.erosion >= st.erosion.max && opt.erosionPage) next = opt.erosionPage;
     arrive(run, next);
   }
+
+  // Web copies made by tools/web-images.py; hidden when an image hasn't been extracted.
+  const sceneImg = (name, cls = 'adv-scene') => gameImg('scenariobackground', name, cls);
+  const iconImg = (name) => gameImg('icons-event', name, 'adv-icon');
 
   const delta = (n, label) => (n ? `<span class="delta ${n > 0 ? 'up' : 'down'}">${label} ${n > 0 ? '+' : ''}${n}</span>` : '');
 
@@ -188,7 +194,7 @@ const MinigameExtras = (() => {
       <button class="nav-btn" id="adv-restart">Restart route</button>
       <button class="nav-btn" id="adv-reset" title="Forget all endings and memories">Reset progress</button></div>`;
 
-    const log = run.log.map((l) => `<div class="adv-past"><div class="adv-text">${esc(a.pages[l.page]?.text || '')}</div>
+    const log = run.log.map((l) => `<div class="adv-past">${a.pages[l.page]?.image ? sceneImg(a.pages[l.page].image, 'adv-scene past') : ''}<div class="adv-text">${esc(a.pages[l.page]?.text || '')}</div>
       <div class="adv-picked">→ ${esc(l.choice)}</div></div>`).join('');
 
     let body;
@@ -210,6 +216,7 @@ const MinigameExtras = (() => {
         body = `<div class="adv-page">${run.notice ? `<div class="adv-notice">${esc(run.notice)}</div>` : ''}
           ${p.ending ? `<div class="adv-ending ending-${p.ending.type.toLowerCase()}"><span class="tag">${esc(ENDING_LABEL[p.ending.type] || p.ending.type)} ${p.ending.num}</span>
             <b>${esc(p.ending.title)}</b>${p.ending.hint ? `<div class="key">${esc(p.ending.hint)}</div>` : ''}</div>` : ''}
+          ${run.image ? sceneImg(run.image) : ''}
           <div class="adv-text">${esc(p.text)}</div>
           <div class="adv-options">
           ${p.type === 'SelectPage' ? opts.map((o, i) => {
@@ -255,7 +262,7 @@ const MinigameExtras = (() => {
       else if (b.dataset.continue) {
         const p = a.pages[run.page];
         run.log.push({ page: run.page, choice: 'Continue' });
-        if (p.toFirstSelect || !p.next) { run.page = null; run.notice = null; } else arrive(run, p.next);
+        if (p.toFirstSelect || !p.next) { run.page = null; run.notice = null; run.image = null; } else arrive(run, p.next);
       } else if (b.dataset.restart) x.play = newRun(route);
       rerender();
       const pages = $('#reader').querySelectorAll('.adv-page');
@@ -303,7 +310,7 @@ const MinigameExtras = (() => {
         <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">Saved</th><th>Item</th><th class="num">Found on</th><th class="num">Unlocks</th></tr></thead><tbody>
         ${g.items.map((i) => `<tr class="${have.has(i.id) ? '' : 'unseen'}">
           <td class="num"><input type="checkbox" class="item-toggle" data-item="${i.id}" ${have.has(i.id) ? 'checked' : ''} aria-label="Saved"></td>
-          <td><div class="track-name">${esc(i.name)}</div><div class="key">${esc(i.description)}</div></td>
+          <td><div class="item-cell">${iconImg(i.icon)}<div><div class="track-name">${esc(i.name)}</div><div class="key">${esc(i.description)}</div></div></div></td>
           <td class="num">${grantedBy.get(i.id) ? `${grantedBy.get(i.id)} page${grantedBy.get(i.id) > 1 ? 's' : ''}` : '—'}</td>
           <td class="num">${usedBy.get(i.id) ? `${usedBy.get(i.id)} choice${usedBy.get(i.id) > 1 ? 's' : ''}` : '—'}</td></tr>`).join('')}
         </tbody></table></div></section>`).join('')}</div>`;
@@ -324,26 +331,163 @@ const MinigameExtras = (() => {
     if (x.play && x.play.page == null) x.play.items = owned();
   }
 
-  // ---------- SD Lobby ----------
-  function lobbyTree(page) {
-    return `<details class="group" open><summary>SD Lobby</summary>
-      ${x.lobby.map((l) => link(`#/minigame/sdlobby/${l.id}`, esc(l.name), l.secret ? 'secret' : '', page === l.id)).join('')}</details>`;
+  // Event minigames: every Event<Game>* table family, one tab each, shown table by table.
+  const egBase = '#/minigame';
+  const ROW_LIMIT = 300;
+
+  function eventsTree(game, page) {
+    const g = game;
+    // Viewer pages in their groups (in order of first appearance), then the raw tables.
+    const groups = new Map();
+    for (const p of g.view?.pages || []) {
+      const k = p.group || g.name;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(p);
+    }
+    const pageLink = (p) => link(`${egBase}/${g.id}/p/${encodeURIComponent(p.id)}`, esc(p.title), p.count, page === `p/${p.id}`);
+    const onTable = g.tables.some((t) => t.name === page);
+    return `<details class="group" open><summary>${esc(g.name)}</summary>
+      ${link(`${egBase}/${g.id}`, 'Overview', '', !page)}
+      ${g.help.length ? link(`${egBase}/${g.id}/help`, 'How to play', g.help.length, page === 'help') : ''}
+      ${(groups.get(g.name) || []).map(pageLink).join('')}</details>
+      ${[...groups].filter(([k]) => k !== g.name).map(([k, ps]) => `<details class="group" open><summary>${esc(k)}</summary>
+        ${ps.map(pageLink).join('')}</details>`).join('')}
+      <details class="group" ${onTable || !g.view ? 'open' : ''}><summary>Data tables</summary>
+      ${g.tables.map((t) => link(`${egBase}/${g.id}/${encodeURIComponent(t.name)}`, esc(t.name), t.rows, page === t.name)).join('')}
+      </details>`;
   }
 
-  function lobbyPage(id) {
-    const l = x.lobby.find((v) => v.id === id) || x.lobby[0];
-    const bgm = Object.entries(l.bgm).filter(([, v]) => v);
-    return head(['Minigames', 'SD Lobby'], esc(l.name), l.description) + `<div class="stage-body">
-      <section class="card"><h3>Details</h3><dl class="facts">
-        ${l.shop ? `<dt>Shop text</dt><dd>${esc(l.shop)}</dd>` : ''}
-        <dt>Art map</dt><dd class="key">${esc(l.resource)}</dd>
-        ${bgm.map(([k, v]) => `<dt>${{ ambient: 'Ambient', idle: 'BGM', touch: 'Touch BGM' }[k]}</dt><dd class="key">${esc(v)}</dd>`).join('')}
-      </dl></section>
-      ${l.cinematics.map((c) => `<section class="card"><h3>Cinematic</h3><dl class="facts">
-        <dt>Timeline</dt><dd class="key">${esc(c.asset)}</dd>
-        ${c.steps.map((s, i) => `<dt>Step ${i + 1}</dt><dd>${esc(s.trigger)}${s.loop ? ' · loops' : ''}${s.touch ? ' · touch input' : ''}</dd>`).join('')}
-      </dl></section>`).join('')}
-    </div>`;
+  // A cell is text or a number, or { img }, { reward }, { scene, label }.
+  function egCell(v, col) {
+    if (v == null || v === '') return '';
+    if (typeof v === 'number') return `<span class="num">${/(^|_)(id|group)(_|$)/i.test(col.key) ? v : fmt(v)}</span>`;
+    if (typeof v !== 'object') {
+      const text = String(v).replace(/<\/?(color|b|i|size)\b[^>]*>/g, ''); // Unity rich-text tags
+      return `<span class="${text.length > 60 ? 'eg-long' : ''}">${esc(text).replace(/\n/g, '<br>')}</span>`;
+    }
+    if (v.img) return `${gameImg('icons-event', v.img, 'eg-img')}<div class="key">${esc(v.img)}</div>`;
+    if (v.reward) return rewardList(v.reward);
+    if (v.scene) return `<a href="#/scene/${encodeURIComponent(v.scene)}">${esc(v.label)}</a>`;
+    return esc(JSON.stringify(v));
+  }
+
+  // ---- Viewer pages (lib/eventgames/<id>.js): sections of text, facts, tables, galleries ----
+  // A value is text, a number, an array (one per line), or { img, caption, size }, { reward },
+  // { scene, label }, { page, label }, { b }, { key }, { text, sub }, { tag, tone }.
+  function vCell(v, g) {
+    if (v == null || v === '' || v === false) return '';
+    if (v === true) return '✓';
+    if (typeof v === 'number') return fmt(v);
+    if (typeof v !== 'object') return esc(String(v)).replace(/\n/g, '<br>');
+    if (Array.isArray(v)) {
+      // Pictures side by side, anything else one per line.
+      if (v.length && v.every((c) => c && c.img !== undefined)) return `<div class="v-row">${v.map((c) => vCell(c, g)).join('')}</div>`;
+      return v.map((c) => vCell(c, g)).filter(Boolean).join('<br>');
+    }
+    if (v.img !== undefined) {
+      return v.img ? `<figure class="v-fig">${gameImg('icons-event', v.img, `v-img ${v.size || ''}`)}${v.caption ? `<figcaption>${esc(v.caption)}</figcaption>` : ''}</figure>`
+        : (v.caption ? esc(v.caption) : '');
+    }
+    if (v.reward !== undefined) return rewardList(v.reward);
+    if (v.scene) return `<a href="#/scene/${encodeURIComponent(v.scene)}">${esc(v.label || v.scene)}</a>`;
+    if (v.page) return `<a href="${egBase}/${g.id}/p/${encodeURIComponent(v.page)}">${esc(v.label || v.page)}</a>`;
+    if (v.b != null) return `<b>${vCell(v.b, g)}</b>`;
+    if (v.key != null) return `<span class="key">${esc(String(v.key))}</span>`;
+    if (v.tag != null) return `<span class="v-tag ${v.tone || ''}">${esc(String(v.tag))}</span>`;
+    if (v.text != null) return `${vCell(v.text, g)}${v.sub ? `<div class="key">${vCell(v.sub, g)}</div>` : ''}`;
+    return esc(JSON.stringify(v));
+  }
+
+  function vSection(s, g) {
+    const h = s.title ? `<h3>${esc(s.title)}${s.sub ? ` <span class="sub">${esc(s.sub)}</span>` : ''}</h3>` : '';
+    const note = s.note ? `<p class="album-desc">${esc(s.note)}</p>` : '';
+    if (s.type === 'text') return `<section class="card">${h}${note}<div class="v-text">${vCell(s.text, g)}</div></section>`;
+    if (s.type === 'list') return `<section class="card">${h}${note}<ul class="v-list">${s.items.map((i) => `<li>${vCell(i, g)}</li>`).join('')}</ul></section>`;
+    if (s.type === 'help') return helpHtml(s.help || []);
+    if (s.type === 'facts') {
+      return `<section class="card">${h}${note}<dl class="facts">${s.items.filter((i) => i && i[1] !== '' && i[1] != null)
+        .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${vCell(v, g)}</dd>`).join('')}</dl></section>`;
+    }
+    if (s.type === 'gallery') {
+      return `<section class="card">${h}${note}<div class="v-gallery">${s.items.map((i) => `<figure class="v-fig">
+        ${gameImg('icons-event', i.img, 'v-img')}<figcaption>${vCell(i.caption, g)}</figcaption></figure>`).join('')}</div></section>`;
+    }
+    if (s.type === 'table') {
+      const cols = s.columns.map((c) => (typeof c === 'string' ? { label: c } : c));
+      return `<section class="card eg-card">${h}${note}<div class="table-scroll"><table class="roster keep-cols eg-table v-table">
+        <thead><tr>${cols.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
+        <tbody>${s.rows.map((r) => `<tr>${r.map((v, j) => `<td class="${cols[j]?.num ? 'num' : ''}">${vCell(v, g)}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table></div></section>`;
+    }
+    return '';
+  }
+
+  const vSections = (sections, g) => (sections || []).map((s) => vSection(s, g)).join('');
+
+  function egOverview(g) {
+    return head(['Minigames'], esc(g.name), g.view?.summary || null) + `<div class="stage-body">
+      ${vSections(g.view?.overview, g)}
+      ${!g.intro && !g.folder && !g.help.length ? '' : `<section class="card"><h3>Details</h3><dl class="facts">
+        ${g.intro ? `<dt>Intro story</dt><dd><a href="#/scene/${encodeURIComponent(g.intro.id)}">${esc(g.intro.label)}</a></dd>` : ''}
+        ${g.folder ? `<dt>Images</dt><dd class="key">icons-event/${esc(g.folder)}</dd>` : ''}
+        ${g.help.length ? `<dt>Guide</dt><dd><a href="${egBase}/${g.id}/help">How to play</a> (${g.help.length} sections)</dd>` : ''}
+      </dl></section>`}
+      <section class="card eg-card"><h3>Data tables</h3><div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Table</th><th class="num">Rows</th></tr></thead><tbody>
+        ${g.tables.map((t) => `<tr><td><a href="${egBase}/${g.id}/${encodeURIComponent(t.name)}">${esc(t.name)}</a></td><td class="num">${fmt(t.rows)}</td></tr>`).join('')}
+      </tbody></table></div></section></div>`;
+  }
+
+  // Small tables (a game's settings) read better as one fact list per row.
+  function egTable(g, t, all) {
+    const title = head(['Minigames', g.name], esc(t.name), `Event${t.table.slice(5)} · ${fmt(t.rows.length)} row(s)`);
+    if (t.rows.length <= 3) {
+      return title + `<div class="stage-body">${t.rows.map((r, i) => `<section class="card"><h3>${t.rows.length > 1 ? `Row ${i + 1}` : 'Values'}</h3><dl class="facts">
+        ${t.columns.map((c, j) => (r[j] === '' ? '' : `<dt>${esc(c.label)}</dt><dd>${egCell(r[j], c)}</dd>`)).join('')}</dl></section>`).join('')}</div>`;
+    }
+    const rows = all ? t.rows : t.rows.slice(0, ROW_LIMIT);
+    return title + `<div class="stage-body"><section class="card eg-card"><div class="table-scroll"><table class="roster keep-cols eg-table">
+      <thead><tr>${t.columns.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map((r) => `<tr>${r.map((v, j) => `<td>${egCell(v, t.columns[j])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      ${rows.length < t.rows.length ? `<button class="nav-btn" id="eg-all">Show all ${fmt(t.rows.length)} rows</button>` : ''}</section></div>`;
+  }
+
+  async function eventsRoute(rest, rerender) {
+    const id = rest[0] || x.events[0]?.id;
+    if (!x.eg[id]) {
+      const res = await apiFetch(`/api/eventgame?id=${encodeURIComponent(id)}`);
+      if (!res.ok) return null;
+      x.eg[id] = await res.json();
+    }
+    const g = x.eg[id];
+    const page = rest[1] ? decodeURIComponent(rest[1]) : null;
+    if (!page) return { tree: eventsTree(g, null), html: egOverview(g) };
+    if (page === 'help') return { tree: eventsTree(g, 'help'), html: head([g.name], 'How to play', 'The in-game guide.') + helpHtml(g.help) };
+    if (page === 'p' && rest[2]) {
+      const pid = decodeURIComponent(rest[2]);
+      const key = `${id}/p/${pid}`;
+      if (!x.egt[key]) {
+        const res = await apiFetch(`/api/eventgame/page?id=${encodeURIComponent(id)}&page=${encodeURIComponent(pid)}`);
+        if (!res.ok) return null;
+        x.egt[key] = await res.json();
+      }
+      const pg = x.egt[key];
+      return {
+        tree: eventsTree(g, `p/${pid}`),
+        html: head(['Minigames', g.name, ...(pg.group ? [pg.group] : [])], esc(pg.title), pg.summary || null) + `<div class="stage-body">${vSections(pg.sections, g)}</div>`,
+      };
+    }
+    const key = `${id}/${page}`;
+    if (!x.egt[key]) {
+      const res = await apiFetch(`/api/eventgame/table?id=${encodeURIComponent(id)}&table=${encodeURIComponent(page)}`);
+      if (!res.ok) return null;
+      x.egt[key] = await res.json();
+    }
+    const t = x.egt[key];
+    return {
+      tree: eventsTree(g, page),
+      html: egTable(g, t, x.egAll === key),
+      bind: () => { const b = $('#eg-all'); if (b) b.onclick = () => { x.egAll = key; rerender(); }; },
+    };
   }
 
   // Routing for the three games; hash is "#/minigame/<game>/...".
@@ -358,13 +502,11 @@ const MinigameExtras = (() => {
         const id = Number(rest[1]);
         return { tree: advTree('route', id), html: routePage(id), bind: () => bindRoute(id, rerender) };
       }
+      if (rest[0] === 'help') return { tree: advTree('help'), html: head([x.adv.name], 'How to play', 'The in-game guide.') + helpHtml(x.adv.help || []) };
       const page = rest[0] === 'items' ? 'items' : 'endings';
       return { tree: advTree(page), html: page === 'items' ? itemsPage() : endingsPage(), bind: page === 'items' ? () => bindItems(rerender) : () => bindEndings(rerender) };
     }
-    if (game === 'sdlobby') {
-      const id = Number(rest[0]) || x.lobby[0]?.id;
-      return { tree: lobbyTree(id), html: lobbyPage(id) };
-    }
+    if (x.events.some((g) => g.id === game)) return eventsRoute([game, ...rest], rerender);
     return null;
   }
 

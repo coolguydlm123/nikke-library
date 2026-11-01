@@ -103,7 +103,7 @@ const Raids = (() => {
     return `<div class="table-scroll"><table class="roster"><thead><tr><th>Enemy</th><th>Grade</th><th>Element</th>
       <th class="num">HP</th><th class="num">ATK</th><th class="num">DEF</th></tr></thead><tbody>
       ${[...b.enemies].sort((x, y) => (y.statsHi?.hp ?? 0) - (x.statsHi?.hp ?? 0)).map((e) => `<tr class="${targets.has(e.id) ? 'is-target' : ''}">
-        <td>${esc(e.name)}${targets.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</td>
+        <td><div class="roster-name">${gameImg('icons-monster', e.art, `roster-art${targets.has(e.id) ? ' big' : ''}`)}<span>${esc(e.name)}${targets.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</span></div></td>
         <td><span class="grade ${gradeClass(e.grade)}">${esc(e.grade || '—')}</span></td><td>${esc((e.element || []).join(', ') || '—')}</td>
         ${e.stats ? `<td class="num">${range(e.stats.hp, e.statsHi.hp)}</td><td class="num">${range(e.stats.atk, e.statsHi.atk)}</td><td class="num">${range(e.stats.def, e.statsHi.def)}</td>`
           : '<td class="num key" colspan="3">no stat data</td>'}</tr>`).join('')}

@@ -16,7 +16,11 @@ Needs Node.js 18+ and no npm packages.
    - `mpksDir`, `typesFile`: the parser's mpks folder and `customTypes.txt`
    - `localeDir`: decrypted locale JSON from nikke-downloader
    - `waveSpawnDir`: wave spawn JSON from nikke-downloader's `wavedata.py`
-2. `npm start` (or `start.bat` on Windows) and open http://localhost:4170
+   - `imageDir`: sprites exported with AssetStudio, one folder per bundle family
+     (`scenariobackground/`, `icons-event/`, `icons-char/`, `icons-monster/`), sorted by
+     nikke-downloader's `sort_images.py`
+2. `python tools/web-images.py` (needs Pillow) to make the web copies in `public/img/`
+3. `npm start` (or `start.bat` on Windows) and open http://localhost:4170
 
 ## Publish the static site
 
@@ -33,3 +37,5 @@ npm run deploy   # pushes dist/ to the gh-pages branch (one fresh commit each ti
 - `lib/`: data libraries; `lib/api.js` holds the API routes, used by both the server and the static build
 - `public/`: front end
 - `build-static.js`, `deploy.js`: static export and publish
+- `tools/web-images.py`: resized copies of the extracted images
+- `lib/eventgames/`: one viewer per event minigame (rules, stages, characters, rewards); see its README.md. Check one with `node tools/check-eventgame.js <id>`

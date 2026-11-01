@@ -64,6 +64,7 @@ const Characters = (() => {
       const members = list.filter((x) => x.corporation === corp);
       return `<details class="group" open><summary>${esc(corp)}<span class="count">${members.length}</span></summary>
         ${members.map((x) => `<a class="scene-link char-link ${c.current?.code === x.code ? 'active' : ''}" href="${href(x.code)}">
+          ${gameImg('icons-char', x.icon, 'char-icon')}
           ${x.element[0] ? `<span class="elem elem-${esc(x.element[0].toLowerCase())}" title="${esc(x.element.join(', '))}"></span>` : ''}
           <span>${esc(x.name)}${x.hasFavorite ? ' <span class="fav-mark" title="Has a favorite item">★</span>' : ''}</span><span class="lines">${esc(x.weapon || '')} · ${esc(x.burst)}</span></a>`).join('')}
       </details>`;
@@ -86,7 +87,9 @@ const Characters = (() => {
     const count = (r) => c.list.filter((x) => x.rarity === r).length;
     $('#reader').innerHTML = `<div class="empty"><h1>Characters</h1>
       <p>${c.list.length} Nikkes: ${count('SSR')} SSR, ${count('SR')} SR, ${count('R')} R.</p>
-      <p>Pick a Nikke from the left for skills, weapon and stories.</p></div>`;
+      <p>Pick a Nikke for skills, weapon and stories.</p></div>
+      <div class="char-gallery">${c.list.filter((x) => x.icon).map((x) => `<a href="${href(x.code)}" title="${esc(x.name)}">
+        ${gameImg('icons-char', x.icon)}<span>${esc(x.name)}</span></a>`).join('')}</div>`;
   }
 
   // With the favorite item toggle on, slots it replaces (1 = Skill 1, 2 = Skill 2, 3 = Burst) use its skills.
@@ -212,13 +215,14 @@ const Characters = (() => {
         </div>
       </div>
       <div class="stage-body">
-        <section class="card"><h3>Profile</h3>
+        <section class="card"><h3>Profile</h3><div class="profile">
+          ${gameImg('icons-char', x.portrait, 'char-portrait')}<div>
           ${x.description ? `<p class="prose">${esc(x.description)}</p>` : ''}
           <dl class="facts">
             ${x.squad ? `<dt>Squad</dt><dd>${esc(x.squad.name)}${x.squad.info ? `<div class="key">${esc(x.squad.info)}</div>` : ''}</dd>` : ''}
             <dt>Manufacturer</dt><dd>${esc(x.corporation)}${x.overspec ? ' · Overspec' : ''}</dd>
             <dt>Critical</dt><dd>${x.critical.rate}% rate · ${x.critical.damage}% damage</dd>
-          </dl>
+          </dl></div></div>
         </section>
         ${w ? `<section class="card"><h3>Weapon</h3>
           <div class="skill-name">${esc(w.name)} <span class="key">${esc(w.typeName)} (${esc(w.type)}) · ${esc(w.attackType)}</span></div>
@@ -251,7 +255,7 @@ const Characters = (() => {
         ${c.cpData ? cpCard(x) : ''}
         ${stories ? `<section class="card"><h3>Stories</h3><div class="scen-list">${stories}</div></section>` : ''}
         ${x.costumes.length ? `<section class="card"><h3>Costumes <span class="sub">${x.costumes.length}</span></h3>
-          <div class="rewards">${x.costumes.map((k) => `<div class="reward costume"><span class="reward-name">${esc(k.name)}</span>
+          <div class="rewards">${x.costumes.map((k) => `<div class="reward costume">${gameImg('icons-char', k.portrait, 'costume-img')}<span class="reward-name">${esc(k.name)}</span>
             <span class="key">${esc(k.description.split('\n').slice(1).join(' ') || k.grade)}</span></div>`).join('')}</div></section>` : ''}
       </div>`;
 

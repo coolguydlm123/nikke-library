@@ -64,6 +64,25 @@ const Progression = (() => {
   // A resource case pays the hourly rate for its hours, rounded down.
   const caseValue = (c, boosted) => Math.floor(rateAt(p.level, c.resource, boosted) * c.hours);
 
+  // One row per resource, one column per case length; each cell is the case's value with
+  // the selected Tactics Academy boosts (unboosted value on hover).
+  function casesCard(o) {
+    const hours = [...new Set(o.cases.map((c) => c.hours))].sort((a, b) => a - b);
+    const rows = [...new Set(o.cases.map((c) => c.resource))];
+    const label = (r) => o.cases.find((c) => c.resource === r).name;
+    return `<section class="card"><h3>Resource cases at level ${clampLevel(p.level)}</h3>
+      <div class="table-scroll"><table class="roster keep-cols case-grid"><thead><tr><th>Resource</th>
+        ${hours.map((h) => `<th class="num">${h}h</th>`).join('')}</tr></thead><tbody>
+      ${rows.map((r) => `<tr><td>${esc(label(r))}${boostOf(r) ? ` <span class="key">+${fmt(boostOf(r))}%</span>` : ''}</td>
+        ${hours.map((h) => {
+          const c = o.cases.find((k) => k.resource === r && k.hours === h);
+          return c ? `<td class="num" title="Without boosts: ${fmt(caseValue(c, false))}"><b>${fmt(caseValue(c, true))}</b><div class="key">${esc(c.rarity)}</div></td>`
+            : '<td class="num key">—</td>';
+        }).join('')}</tr>`).join('')}
+      </tbody></table></div>
+      <p class="key note">Case value = hourly rate × hours, rounded down, with the Tactics Academy lessons selected above. Hover a value to see it without boosts.</p></section>`;
+  }
+
   function outpostPage() {
     const o = p.outpost;
     const row = o.levels[clampLevel(p.level) - 1];
@@ -94,12 +113,7 @@ const Progression = (() => {
             ${row.items.map((i) => `<tr><td>${esc(i.name)} ×${i.amount}</td><td class="num">${i.everySec % 3600 ? `${fmt(i.everySec / 60)} min` : `${i.everySec / 3600} h`}</td>
               <td class="num">${fmt(Math.floor(86400 / i.everySec) * i.amount)}</td></tr>`).join('')}</tbody></table></div>` : ''}
         </section>
-        <section class="card"><h3>Resource cases at level ${clampLevel(p.level)}</h3>
-          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Case</th><th class="num">Hours</th><th class="num">Value</th><th class="num">With boosts</th></tr></thead><tbody>
-          ${o.cases.map((c) => `<tr><td>${esc(c.name)} <span class="key">${esc(c.rarity)}</span></td><td class="num">${c.hours}</td>
-            <td class="num">${fmt(caseValue(c, false))}</td><td class="num"><b>${fmt(caseValue(c, true))}</b></td></tr>`).join('')}
-          </tbody></table></div>
-          <p class="key note">Case value = hourly rate × hours, rounded down. "With boosts" applies the selected Tactics Academy lessons, in case they count for cases in your game.</p></section>
+        ${casesCard(o)}
       </div>`;
     const setLevel = (v) => { p.level = clampLevel(v); store.set('progOutpostLevel', p.level); outpostPage(); };
     $('#op-lv-range').oninput = (e) => setLevel(e.target.value);
@@ -206,7 +220,15 @@ const Progression = (() => {
     const span = L.filter((r) => r.level >= from && r.level < to);
     const sum = (k) => span.reduce((s, r) => s + r[k], 0);
     const needSynchro = Math.max(0, ...span.filter((r) => !r.synchro).map((r) => r.needSynchro));
-    const milestones = L.filter((r) => r.coreDust > 0 && (r.level % 10 === 0 || r.level === 200));
+    const milestones = L.filter((r) => !r.synchro && r.coreDust > 0 && (r.level % 10 === 0 || r.level === 200));
+    // Synchro Device levels share costs over long runs: one row per run of equal cost.
+    const runs = [];
+    for (const r of L.filter((x) => x.synchro)) {
+      const last = runs[runs.length - 1];
+      if (last && last.to === r.level - 1 && last.credit === r.credit && last.battleData === r.battleData && last.coreDust === r.coreDust) last.to = r.level;
+      else runs.push({ from: r.level, to: r.level, credit: r.credit, battleData: r.battleData, coreDust: r.coreDust });
+    }
+    const runCell = (run, k) => `<td class="num">${fmt(run[k])}<div class="key">${fmt(run[k] * (run.to - run.from + 1))} total</div></td>`;
     $('#reader').innerHTML = head(['Progression'], 'Level-up cost',
       'Levels 1–200 are character levels (each needs a minimum synchro level). Levels 201+ are Synchro Device enhancement levels.') + `
       <div class="stage-body">
@@ -217,11 +239,16 @@ const Progression = (() => {
             <div><span class="key">Battle Data</span><b>${fmt(sum('battleData'))}</b></div><div><span class="key">Core Dust</span><b>${fmt(sum('coreDust'))}</b></div></div>
           <p class="key note">${span.length} level-ups from Lv ${from} to Lv ${to}${needSynchro ? ` · needs Synchro Device level ${needSynchro}+ for the character levels` : ''}${to > 201 ? ' · includes Synchro Device enhancement levels' : ''}.</p>
         </section>
-        <section class="card"><h3>Core Dust levels <span class="sub">${milestones.length}</span></h3>
-          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">Level</th><th>Kind</th><th class="num">Needs synchro</th><th class="num">Credits</th><th class="num">Battle Data</th><th class="num">Core Dust</th></tr></thead><tbody>
-          ${milestones.map((r) => `<tr><td class="num">${r.level} → ${r.level + 1}</td><td>${r.synchro ? 'Synchro Device' : 'Character'}</td>
-            <td class="num">${r.synchro ? '—' : r.needSynchro}</td><td class="num">${fmt(r.credit)}</td><td class="num">${fmt(r.battleData)}</td><td class="num">${fmt(r.coreDust)}</td></tr>`).join('')}
-          </tbody></table></div><p class="key note">Levels where Core Dust is needed, every 10 levels.</p></section>
+        <section class="card"><h3>Synchro Device upgrade cost <span class="sub">${runs.length} cost tiers</span></h3>
+          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">Levels</th><th class="num">Level-ups</th><th class="num">Credits / level</th><th class="num">Battle Data / level</th><th class="num">Core Dust / level</th></tr></thead><tbody>
+          ${runs.map((run) => `<tr><td class="num">${run.from} → ${run.to + 1}</td><td class="num">${run.to - run.from + 1}</td>
+            ${runCell(run, 'credit')}${runCell(run, 'battleData')}${runCell(run, 'coreDust')}</tr>`).join('')}
+          </tbody></table></div><p class="key note">Every level in a row costs the same; "total" is the whole row.</p></section>
+        <section class="card"><h3>Character Core Dust levels <span class="sub">${milestones.length}</span></h3>
+          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">Level</th><th class="num">Needs synchro</th><th class="num">Credits</th><th class="num">Battle Data</th><th class="num">Core Dust</th></tr></thead><tbody>
+          ${milestones.map((r) => `<tr><td class="num">${r.level} → ${r.level + 1}</td>
+            <td class="num">${r.needSynchro}</td><td class="num">${fmt(r.credit)}</td><td class="num">${fmt(r.battleData)}</td><td class="num">${fmt(r.coreDust)}</td></tr>`).join('')}
+          </tbody></table></div><p class="key note">Character levels where Core Dust is needed, every 10 levels.</p></section>
       </div>`;
     const save = () => { store.set('progFrom', p.from); store.set('progTo', p.to); levelsPage(); };
     $('#lv-from').onchange = (e) => { p.from = Number(e.target.value) || 1; save(); };

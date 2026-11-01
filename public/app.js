@@ -13,6 +13,20 @@ function staticApiPath(url) {
 }
 const apiFetch = (url) => fetch(window.STATIC_API ? staticApiPath(url) : url);
 
+// Extracted game art (web copies from tools/web-images.py, names lowercased). An image
+// that wasn't extracted removes itself instead of showing as broken.
+const gameImg = (family, name, cls = '') => (name
+  ? `<img class="${cls}" src="img/${family}/${esc(String(name).toLowerCase())}.${family === 'scenariobackground' ? 'jpg' : 'webp'}" alt="" loading="lazy" onerror="this.remove()">`
+  : '');
+
+// A minigame's in-game "how to play" pages.
+function helpHtml(help) {
+  return `<div class="stage-body">${help.map((h) => `<section class="card"><h3>${esc(h.title)}</h3>
+    ${h.pages.map((p) => `<div class="help-page">${gameImg('icons-event', p.image, 'help-img')}
+      <div>${p.title && p.title !== h.title ? `<div class="track-name">${esc(p.title)}</div>` : ''}<div class="adv-text">${esc(p.text)}</div></div></div>`).join('')}
+  </section>`).join('')}</div>`;
+}
+
 const store = {
   get(k, d) { try { const v = localStorage.getItem('nl.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('nl.' + k, JSON.stringify(v)); } catch {} },
@@ -26,6 +40,10 @@ const state = {
   mode: store.get('mode', 'flow'),          // 'flow' follows choices/jumps, 'all' shows raw order
   showKeys: store.get('showKeys', false),
   showDirections: store.get('showDirections', false),
+  showBackgrounds: store.get('showBackgrounds', true),
+  showIcons: store.get('showIcons', true),
+  gameView: store.get('gameView', false), // one line at a time over the background, like the game
+  step: 0,
   choices: {},                              // choice block id -> selected option index
 };
 
@@ -150,6 +168,7 @@ async function route() {
   if (!res.ok) { $('#reader').innerHTML = `<div class="error">Scene "${esc(id)}" not found.</div>`; return; }
   state.scene = await res.json();
   state.choices = {};
+  state.step = 0;
   if (state.scene.cat !== state.cat) { state.cat = state.scene.cat; store.set('cat', state.cat); renderTabs(); }
   renderTree();
   renderScene();
@@ -214,15 +233,18 @@ function directionsHtml(line) {
 }
 
 function lineHtml(line, raw) {
-  const { speakers } = state.scene;
+  const { speakers, icons = {} } = state.scene;
   const type = (line.type || 'Speech').toLowerCase();
   const name = line.speaker ? speakers[line.speaker] ?? line.speaker : '';
   const color = type === 'speech' || type === 'monologue' ? `style="color:${speakerColor(line.speaker)}"` : '';
   const meta = state.showKeys
     ? `<div class="key"><span class="lid">${shortId(line.id)}</span>${esc(line.key || '')}${line.speaker ? ` · ${esc(line.speaker)}` : ''}</div>` : '';
   let out = directionsHtml(line);
+  // Shown when the background changes (scripts often set the same one again).
+  if (state.showBackgrounds && line.bgArt && line.bgArt !== state.lastBg) out += `<figure class="scene-bg">${gameImg('scenariobackground', line.bgArt, 'scene-bg-img')}<figcaption class="key">${esc(line.bg)}</figcaption></figure>`;
+  if (line.bgArt) state.lastBg = line.bgArt;
   out += `<div class="line ${type}">
-    <div class="who" ${color}>${esc(name)}</div>
+    <div class="who" ${color}>${state.showIcons && icons[line.speaker] ? gameImg('icons-char', icons[line.speaker], 'who-icon') : ''}${esc(name)}</div>
     <div class="body"><div class="say">${textHtml(line)}</div>${meta}</div>
   </div>`;
   if (raw && line.jump) out += `<div class="jump-note">↳ jumps to ${shortId(line.jump)}</div>`;
@@ -248,36 +270,44 @@ function choiceHtml(item) {
 
 function renderScene() {
   const s = state.scene;
-  const items = state.mode === 'flow' ? flowItems(s.lines) : rawItems(s.lines);
+  const items = state.mode === 'flow' || state.gameView ? flowItems(s.lines) : rawItems(s.lines);
   const navBtn = (id, label) => `<a class="nav-btn" href="${id ? '#/scene/' + encodeURIComponent(id) : '#'}" aria-disabled="${!id}">${label}</a>`;
   const shown = items.reduce((n, it) => n + (it.choice ? 1 : 1), 0);
+  state.lastBg = null;
 
   $('#reader').innerHTML = `
     <div class="scene-head">
       <div class="crumb">${esc(state.catalogue.find((c) => c.id === s.cat).label)} · ${esc(s.group.label)}${s.stage ? ` · ${esc(s.stage)}` : ''}</div>
       <div class="scene-title">${esc(s.label)}</div>
       <div class="toolbar">
-        <div class="seg" id="mode">
+        <label class="toggle"><input type="checkbox" id="t-game" ${state.gameView ? 'checked' : ''}> Game view</label>
+        <div class="seg" id="mode" ${state.gameView ? 'hidden' : ''}>
           <button data-mode="flow" class="${state.mode === 'flow' ? 'active' : ''}" title="Follow choices and jumps like the game">Play flow</button>
           <button data-mode="all" class="${state.mode === 'all' ? 'active' : ''}" title="Every line in file order, all branches">All lines</button>
         </div>
         <label class="toggle"><input type="checkbox" id="t-keys" ${state.showKeys ? 'checked' : ''}> Keys</label>
         <label class="toggle"><input type="checkbox" id="t-dir" ${state.showDirections ? 'checked' : ''}> Stage directions</label>
+        <label class="toggle"><input type="checkbox" id="t-bg" ${state.showBackgrounds ? 'checked' : ''}> Backgrounds</label>
+        <label class="toggle"><input type="checkbox" id="t-icons" ${state.showIcons ? 'checked' : ''}> Icons</label>
         <span class="key">${esc(s.id)} · ${shown}/${s.lines.length} lines</span>
         <span class="spacer"></span>
         ${navBtn(s.prev, '← Prev')}${navBtn(s.next, 'Next →')}
       </div>
     </div>
-    <div class="script">
+    ${state.gameView ? '<div id="game"></div>' : `<div class="script">
       ${items.map((it) => (it.choice ? choiceHtml(it) : lineHtml(it.line, it.raw))).join('')}
       <div class="end-mark">— END —</div>
       <div class="end-nav">${navBtn(s.prev, '← Previous scene')}${navBtn(s.next, 'Next scene →')}</div>
-    </div>`;
+    </div>`}`;
+  if (state.gameView) renderGame(items);
 
   $('#mode').querySelectorAll('button').forEach((b) => b.onclick = () => { state.mode = b.dataset.mode; store.set('mode', state.mode); renderScene(); });
   $('#t-keys').onchange = (e) => { state.showKeys = e.target.checked; store.set('showKeys', state.showKeys); renderScene(); };
   $('#t-dir').onchange = (e) => { state.showDirections = e.target.checked; store.set('showDirections', state.showDirections); renderScene(); };
-  $('#reader').querySelectorAll('.option').forEach((b) => b.onclick = () => {
+  $('#t-bg').onchange = (e) => { state.showBackgrounds = e.target.checked; store.set('showBackgrounds', state.showBackgrounds); renderScene(); };
+  $('#t-icons').onchange = (e) => { state.showIcons = e.target.checked; store.set('showIcons', state.showIcons); renderScene(); };
+  $('#t-game').onchange = (e) => { state.gameView = e.target.checked; store.set('gameView', state.gameView); renderScene(); };
+  $('#reader').querySelectorAll('.script .option').forEach((b) => b.onclick = () => {
     if (state.mode !== 'flow') return;
     state.choices[b.dataset.block] = Number(b.dataset.i);
     const y = $('#reader').scrollTop;
@@ -286,8 +316,67 @@ function renderScene() {
   });
 }
 
+// Game view: the play flow one line at a time, in a dialogue box over the scene's
+// current background (the last one set up to this line), with the speaker's icon.
+function renderGame(items = flowItems(state.scene.lines)) {
+  const s = state.scene;
+  state.step = Math.max(0, Math.min(state.step, items.length));
+  const end = state.step >= items.length;
+  const item = items[state.step];
+  let bg = null;
+  for (let i = 0; i <= Math.min(state.step, items.length - 1); i++) if (items[i].line?.bgArt) bg = items[i].line.bgArt;
+  let box = '';
+  if (end) {
+    box = `<div class="game-box game-end"><div class="game-text">— END —</div>
+      <div class="game-end-nav">${s.next ? `<a class="nav-btn" href="#/scene/${encodeURIComponent(s.next)}">Next scene →</a>` : ''}</div></div>`;
+  } else if (item.choice) {
+    box = `<div class="game-choices">${item.choice.map((opt, i) => `<button class="option game-opt" data-i="${i}">${textHtml(opt)}</button>`).join('')}</div>`;
+  } else {
+    const line = item.line;
+    const type = (line.type || 'Speech').toLowerCase();
+    const name = line.speaker ? s.speakers[line.speaker] ?? line.speaker : '';
+    const icon = state.showIcons && (s.icons || {})[line.speaker];
+    const narration = type === 'narration' || !name;
+    box = `<div class="game-box ${type}">
+      ${narration ? '' : `<div class="game-name" style="color:${speakerColor(line.speaker)}">${icon ? gameImg('icons-char', icon, 'game-icon') : ''}<span>${esc(name)}${type === 'monologue' ? ' <i>(thought)</i>' : ''}</span></div>`}
+      <div class="game-text">${textHtml(line)}</div>
+      ${state.showKeys ? `<div class="key">${esc(line.key || '')}</div>` : ''}
+      ${line.enter ? `<div class="jump-note">↳ enters scenario <a href="#/scene/${encodeURIComponent(line.enter)}">${esc(line.enter)}</a></div>` : ''}
+    </div>`;
+  }
+  $('#game').innerHTML = `<div class="game-stage ${state.showBackgrounds && bg ? '' : 'no-bg'}">
+      ${state.showBackgrounds && bg ? gameImg('scenariobackground', bg, 'game-bg-fill') + gameImg('scenariobackground', bg, 'game-bg') : ''}
+      ${box}
+    </div>
+    <div class="game-controls">
+      <button class="nav-btn" id="g-back" ${state.step ? '' : 'disabled'}>← Back</button>
+      <span class="key">${Math.min(state.step + 1, items.length)} / ${items.length}</span>
+      <button class="nav-btn" id="g-next" ${end ? 'disabled' : ''}>Next →</button>
+    </div>
+    <p class="key game-hint">Click the scene or press Space / Enter for the next line, Backspace to go back.</p>`;
+  $('#g-back').onclick = () => gameStep(-1);
+  $('#g-next').onclick = () => gameStep(1);
+  $('#game .game-stage').onclick = (e) => { if (!e.target.closest('a, button')) gameStep(1); };
+  $('#game').querySelectorAll('.game-opt').forEach((b) => b.onclick = () => {
+    state.choices[item.blockId] = Number(b.dataset.i);
+    state.step += 1;
+    renderGame();
+  });
+}
+
+function gameStep(d) {
+  const items = flowItems(state.scene.lines);
+  if (d > 0 && items[state.step]?.choice) return; // pick an option to go on
+  state.step = Math.max(0, Math.min(items.length, state.step + d));
+  renderGame(items);
+}
+
 document.addEventListener('keydown', (e) => {
   if (section !== 'stories' || !state.scene || e.target.matches('input')) return;
+  if (state.gameView && $('#game')) {
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); gameStep(1); return; }
+    if (e.key === 'Backspace' || e.key === 'ArrowUp') { e.preventDefault(); gameStep(-1); return; }
+  }
   if (e.key === 'ArrowRight' && state.scene.next) location.hash = '#/scene/' + encodeURIComponent(state.scene.next);
   if (e.key === 'ArrowLeft' && state.scene.prev) location.hash = '#/scene/' + encodeURIComponent(state.scene.prev);
 });

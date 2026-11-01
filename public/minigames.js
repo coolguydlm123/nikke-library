@@ -18,6 +18,7 @@ const Minigames = (() => {
     const game = gameOf(location.hash);
     $('#cat-tabs').innerHTML = Object.entries(m.games).filter(([, g]) => g).map(([id, g]) =>
       `<a class="cat-tab ${game === id ? 'active' : ''}" href="#/minigame/${id}">${esc(g.name)}<span class="n">${g.count}</span></a>`).join('');
+    $('#cat-tabs .cat-tab.active')?.scrollIntoView({ block: 'nearest' }); // the tab list scrolls (one tab per game)
   }
   const gameOf = (hash) => hash.match(/^#\/minigame\/(\w+)/)?.[1] || 'tts';
 
@@ -37,7 +38,8 @@ const Minigames = (() => {
     $('#tree').innerHTML = `<details class="group" open><summary>${esc(t.name)}</summary>
       ${link(base, 'Overview', '', m.page?.kind === 'overview')}
       ${link(`${base}/missions`, 'Missions', t.missionCount, m.page?.kind === 'missions')}
-      ${link(`${base}/skins`, 'Skins', t.skinCount, m.page?.kind === 'skins')}</details>
+      ${link(`${base}/skins`, 'Skins', t.skinCount, m.page?.kind === 'skins')}
+      ${t.help?.length ? link(`${base}/help`, 'How to play', t.help.length, m.page?.kind === 'help') : ''}</details>
       <details class="group" open><summary>Songs</summary>
       ${link(`${base}/songs`, 'All songs', count(t.songs), onSongs(null))}
       ${t.albums.map((a) => link(`${base}/songs/${a.id}`, esc(a.name), count(t.songs.filter((s) => s.album === a.id)) || '—', onSongs(a.id))).join('')}
@@ -45,7 +47,7 @@ const Minigames = (() => {
     $('#tree .scene-link.active')?.scrollIntoView({ block: 'nearest' });
   }
 
-  // VOLT TRIP, Fading Affection and SD Lobby live in minigames-extra.js.
+  // VOLT TRIP, Fading Affection and the event minigames live in minigames-extra.js.
   async function renderExtra(game, rest, keepScroll) {
     const y = $('#reader').scrollTop;
     const page = await MinigameExtras.route(game, rest, () => renderExtra(game, rest, true));
@@ -77,11 +79,12 @@ const Minigames = (() => {
       m.page = { kind: 'songs', album: s ? s.album : null, highlight: s?.id };
     } else if (/\/missions$/.test(h)) m.page = { kind: 'missions' };
     else if (/\/skins$/.test(h)) m.page = { kind: 'skins' };
+    else if (/\/help$/.test(h)) m.page = { kind: 'help' };
     else m.page = { kind: 'overview' };
     if (m.page.kind === 'missions' && !m.missions) m.missions = await (await apiFetch('/api/tts/missions')).json();
     if (m.page.kind === 'skins' && !m.skins) m.skins = await (await apiFetch('/api/tts/skins')).json();
     renderTree();
-    ({ overview, songs: songsPage, missions: missionsPage, skins: skinsPage })[m.page.kind]();
+    ({ overview, songs: songsPage, missions: missionsPage, skins: skinsPage, help: helpPage })[m.page.kind]();
     $('#reader').scrollTop = 0;
     $('#reader .is-target')?.scrollIntoView({ block: 'center' });
   }
@@ -186,12 +189,16 @@ const Minigames = (() => {
       <div class="stage-body">${types.map((type) => {
         const list = m.skins.filter((k) => k.type === type);
         return `<section class="card"><h3>${esc(type)} <span class="sub">${list.length}</span></h3><div class="rewards">
-          ${list.map((k) => `<div class="reward costume"><span class="reward-name">${esc(k.name)}</span>
+          ${list.map((k) => `<div class="reward costume">${gameImg('icons-event', k.icon, 'skin-icon')}<span class="reward-name">${esc(k.name)}</span>
             <span class="reward-amt">${k.free ? 'Free' : `${esc(k.cost.name)} ×${fmt(k.cost.amount)}`}</span>
             ${k.description ? `<span class="key">${esc(k.description)}</span>` : ''}
             ${k.release ? `<span class="key">Released ${day(k.release)}</span>` : ''}</div>`).join('')}
         </div></section>`;
       }).join('')}</div>`;
+  }
+
+  function helpPage() {
+    $('#reader').innerHTML = head([m.tts.name], 'How to play', '<p class="album-desc">The in-game guide.</p>') + helpHtml(m.tts.help);
   }
 
   return { enter, route, renderTree, rerender };

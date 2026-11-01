@@ -6,7 +6,7 @@ const { loadAll } = require('./lib/load');
 const { createApi } = require('./lib/api');
 
 const PUBLIC = path.join(__dirname, 'public');
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' };
 
 const libs = loadAll(__dirname);
 const api = createApi(libs);
