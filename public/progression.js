@@ -35,6 +35,7 @@ const Progression = (() => {
     const link = (hash, label, meta, active) =>
       `<a class="scene-link ${active ? 'active' : ''}" href="${hash}"><span>${label}</span><span class="lines">${meta ?? ''}</span></a>`;
     let html = `<details class="group" open><summary>Progression</summary>
+      ${link('#/progression', 'Overview', '', p.page === 'hub')}
       ${TABS.map(([id, label]) => link(`#/progression/${id}`, label, '', p.page === id)).join('')}</details>`;
     if (p.page === 'simulation' && p.simulation) {
       html += `<details class="group" open><summary>Simulation Room</summary>
@@ -47,14 +48,39 @@ const Progression = (() => {
 
   async function route() {
     const m = location.hash.match(/^#\/progression\/(\w+)/);
-    p.page = m && TABS.some(([id]) => id === m[1]) ? m[1] : 'outpost';
+    p.page = m && TABS.some(([id]) => id === m[1]) ? m[1] : 'hub';
     const season = location.hash.match(/^#\/progression\/simulation\/season\/(\d+)/);
     p.simSeason = season ? Number(season[1]) : null;
-    if (p.page === 'simulation' && !p.simulation) p.simulation = await (await apiFetch('/api/progression/simulation')).json();
-    if (p.page === 'levels' && !p.levels) p.levels = await (await apiFetch('/api/progression/levels')).json();
+    if (['simulation', 'hub'].includes(p.page) && !p.simulation) p.simulation = await (await apiFetch('/api/progression/simulation')).json();
+    if (['levels', 'hub'].includes(p.page) && !p.levels) p.levels = await (await apiFetch('/api/progression/levels')).json();
     renderTabs();
     renderTree();
-    ({ outpost: outpostPage, simulation: simulationPage, levels: levelsPage })[p.page]();
+    ({ hub: hubPage, outpost: outpostPage, simulation: simulationPage, levels: levelsPage })[p.page]();
+  }
+
+  // Landing page: a card per page and per Overclock season, so the section works on a phone
+  // without the sidebar.
+  function hubPage() {
+    const s = p.simulation;
+    const synchro = p.levels.filter((r) => r.synchro);
+    $('#reader').innerHTML = hubHtml({
+      title: 'Progression',
+      text: 'Outpost Defense income, Simulation Room rewards and level-up costs.',
+      groups: [
+        { cards: [
+          { href: '#/progression/outpost', title: 'Outpost', n: `${p.outpost.levels.length} levels`, text: 'Income per hour, resource cases and every level with your Tactics Academy boosts.' },
+          { href: '#/progression/simulation', title: 'Simulation Room', n: `${s.difficulties.length} difficulties`, text: `Clear rewards and ${s.overclockRewards.length} Overclock reward levels, with Synchro Device boosts.` },
+          { href: '#/progression/levels', title: 'Level-up cost', n: `${fmtNum(p.levels.length + 1)} levels`, text: `Calculator, character levels 1–200 and ${fmtNum(synchro.length)} Synchro Device enhancement levels.` },
+        ] },
+        { title: 'Overclock seasons', cards: s.overclock.map((o) => ({
+          href: `#/progression/simulation/season/${o.id}`,
+          title: o.name,
+          n: `${o.penalties.length} penalties`,
+          text: `${o.levels} OC levels${o.main ? '' : ' · beta'}`,
+        })) },
+      ],
+    });
+    $('#reader').scrollTop = 0;
   }
 
   // ---------- Outpost ----------

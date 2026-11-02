@@ -38,6 +38,7 @@ const Stages = (() => {
   }
 
   const towerShort = (name) => name.replace(/\s+Tower$/i, '');
+  const towerDays = (t) => `${t.days.length === 7 ? 'Daily' : t.days.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(' ')}${t.dailyLimit ? ` · ${t.dailyLimit}/day` : ''}`;
 
   function link(kind, item, label, meta) {
     const active = s.current && s.current.kind === kind && s.current.id === item.id;
@@ -67,8 +68,7 @@ const Stages = (() => {
       for (const t of s.catalogue.towers.filter((x) => x.id === s.tower)) {
         const floors = floorQuery != null ? t.floors.filter((x) => String(x.floor).startsWith(f)) : t.floors;
         if (!floors.length) continue;
-        const days = t.days.length === 7 ? 'Daily' : t.days.map((d) => 'SMTWTFS'[d]).join('');
-        html += `<div class="tower-head">${esc(t.name)}<span>${days}${t.dailyLimit ? ` · ${t.dailyLimit}/day` : ''}</span></div>`;
+        html += `<div class="tower-head">${esc(t.name)}<span>${esc(towerDays(t))}</span></div>`;
         for (let i = 0; i < floors.length; i += FLOOR_BUCKET) {
           const chunk = floors.slice(i, i + FLOOR_BUCKET);
           const open = floorQuery != null || chunk.some((x) => s.current?.id === x.id);
@@ -114,9 +114,24 @@ const Stages = (() => {
   function overview() {
     const c = s.catalogue;
     const stageCount = c.chapters.reduce((n, ch) => n + Object.values(ch.modes).reduce((a, l) => a + l.length, 0), 0);
-    $('#reader').innerHTML = `<div class="empty"><h1>Stages</h1>
-      <p>${fmt(stageCount)} campaign stages across ${c.chapters.length} chapters, and ${c.towers.map((t) => `${esc(t.name)} (${fmt(t.floors.length)} floors)`).join(', ')}.</p>
-      <p>Pick a stage or floor from the left to see its enemies, waves and rewards.</p></div>`;
+    // Hub: a card per chapter (opens its first stage in the current mode, else the first mode it has) and per tower.
+    const chapterCard = (ch) => {
+      const list = ch.modes[s.mode] || Object.values(ch.modes)[0];
+      const all = Object.values(ch.modes).flat().map((x) => x.lv);
+      return {
+        href: href('campaign', list[0].id),
+        title: `Chapter ${ch.chapter}${ch.name ? ` · ${ch.name}` : ''}`,
+        text: `${Object.entries(ch.modes).map(([m, l]) => `${m} ${l.length}`).join(' · ')} · Lv ${Math.min(...all)}–${Math.max(...all)}`,
+      };
+    };
+    $('#reader').innerHTML = hubHtml({
+      title: 'Stages',
+      text: `${fmt(stageCount)} campaign stages in ${c.chapters.length} chapters and ${c.towers.length} towers: enemies, waves and rewards.`,
+      groups: [
+        { title: 'Towers', cards: c.towers.map((t) => ({ href: href('tower', t.floors[0].id), title: t.name, n: `${fmt(t.floors.length)} floors`, text: towerDays(t) })) },
+        { title: 'Campaign', cards: c.chapters.filter((ch) => Object.keys(ch.modes).length).map(chapterCard) },
+      ],
+    });
   }
 
   const gradeClass = (g) => `grade-${String(g || '').toLowerCase()}`;

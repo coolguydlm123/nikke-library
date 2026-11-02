@@ -13,10 +13,12 @@ const Maps = (() => {
   const href = (id, pid) => `#/map/${encodeURIComponent(id)}${pid ? `/${pid}` : ''}`;
   const KIND_LABEL = { campaign: 'Campaign', event: 'Events', lostsector: 'Lost Sectors', other: 'Other' };
   // gates share the switches' toggle: a gate means nothing without the switch that opens it
-  const LAYERS = [['stage', 'Stages'], ['relic', 'Relics'], ['switch', 'Switches & gates'], ['teleport', 'Teleports'], ['start', 'Start'], ['backdrop', 'Backdrop']];
+  const LAYERS = [['stage', 'Stages'], ['relic', 'Relics'], ['switch', 'Switches & gates'], ['teleport', 'Teleports'], ['start', 'Start'], ['side', 'Side quests'], ['backdrop', 'Backdrop']];
   const layerOf = (x) => (x.layer === 'gate' ? 'switch' : x.layer);
-  // Every layer starts shown except the backdrop (far-off scenery around the field, see maps.py).
-  const isOn = (k) => (k === 'backdrop' ? m.layers[k] === true : m.layers[k] !== false);
+  // Every layer starts shown except side quests (event / favourite-item stages placed on the field)
+  // and the backdrop (far-off scenery around the field, see maps.py).
+  const OFF_BY_DEFAULT = ['side', 'backdrop'];
+  const isOn = (k) => (OFF_BY_DEFAULT.includes(k) ? m.layers[k] === true : m.layers[k] !== false);
   const elemDot = (e) => `<span class="elem elem-${esc(e.toLowerCase())}" title="${esc(e)}"></span>`;
   const elems = (list) => (list?.length ? list.map((e) => `${elemDot(e)} ${esc(e)}`).join(', ') : '—');
   const rewardText = (x) => (x.scene
@@ -87,17 +89,28 @@ const Maps = (() => {
     select(pick || null, !!pick);
   }
 
+  // Landing page (README "Page patterns": section hub): one card per chapter in the chosen mode,
+  // with its top-down thumbnail, so Maps works on a phone without opening the sidebar.
   function overview() {
     const list = filtered();
-    $('#reader').innerHTML = `
-      <div class="scene-head"><div class="crumb">Maps</div><div class="scene-title">Field maps</div>
-        <div class="key">The 3D fields of the campaign, with every stage, relic, switch and teleport on them.</div></div>
-      <div class="stage-body"><section class="card"><h3>Maps <span class="sub">${list.length}</span></h3>
-        <div class="table-scroll"><table class="roster keep-cols sticky-first"><thead><tr><th>Map</th><th>Mode</th><th class="num">Stages</th><th class="num">Relics</th></tr></thead>
-        <tbody>${list.map((x) => `<tr><td><a href="${href(x.id)}">${esc(x.title)}</a></td><td>${esc(x.group || '—')}</td>
-          <td class="num">${fmtNum(x.stages)}</td><td class="num">${fmtNum(x.relics)}</td></tr>`).join('')}</tbody></table></div>
-        <p class="note">More maps are added as they are exported. Drag to rotate, scroll or pinch to zoom, right-drag or two-finger drag to pan.</p>
-      </section></div>`;
+    const camp = list.filter((x) => x.kind === 'campaign');
+    const groups = [];
+    for (const x of camp) {
+      const from = Math.floor(x.chapter / 10) * 10;
+      const title = `Chapters ${from}–${from + 9}`;
+      if (groups.at(-1)?.title !== title) groups.push({ title, cards: [] });
+      groups.at(-1).cards.push({ href: href(x.id), title: `Chapter ${x.chapter}`, text: x.title.replace(/^Chapter \d+ · /, ''),
+        n: `${x.stages} stages`, img: x.thumb });
+    }
+    const other = list.filter((x) => x.kind !== 'campaign');
+    if (other.length) groups.push({ title: 'Other', cards: other.map((x) => ({ href: href(x.id), title: x.title, n: `${x.stages} stages`, img: x.thumb })) });
+    const modes = `<div class="seg map-hub-modes">${MODES.map((mode) => `<button class="${m.mode === mode ? 'active' : ''}" data-mode="${mode}">${mode}</button>`).join('')}</div>`;
+    $('#reader').innerHTML = hubHtml({
+      title: 'Maps',
+      text: 'Campaign fields in 3D with every stage, relic, switch and teleport on them.',
+      groups: groups.length ? groups : [{ cards: [] }],
+    }).replace('</h1>', `</h1>${modes}`);
+    $('#reader').querySelectorAll('.map-hub-modes [data-mode]').forEach((b) => b.onclick = () => setMode(b.dataset.mode, false));
   }
 
   // --- page ---------------------------------------------------------------------------
@@ -136,6 +149,10 @@ const Maps = (() => {
           <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">#</th><th>Type</th><th>Reward</th></tr></thead>
           <tbody>${relics.map((x) => row(x, `<td class="num">${x.no}</td><td>${esc(x.label)}</td>
             <td>${rewardText(x)}</td>`)).join('')}</tbody></table></div></section>` : ''}
+        ${by('side').length ? `<section class="card"><h3>Side quests <span class="sub">${by('side').length}</span></h3>
+          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Quest</th><th>Kind</th></tr></thead>
+          <tbody>${by('side').map((x) => row(x, `<td>${esc(x.label)}</td><td>${esc(x.kind)}</td>`)).join('')}</tbody></table></div>
+          <p class="note">Event stages and favourite-item quests placed on this field. Their layer starts hidden.</p></section>` : ''}
         ${by('switch').length || by('teleport').length ? `<section class="card"><h3>Switches &amp; teleports</h3>
           <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Object</th><th>Does</th></tr></thead><tbody>
           ${by('switch').map((x) => row(x, `<td>${esc(x.name)}</td><td>Opens ${x.opens.map((n) => `gate ${n}`).join(', ') || '—'}${x.repeatable ? ' (repeatable)' : ''}</td>`)).join('')}
@@ -175,6 +192,7 @@ const Maps = (() => {
     if (x.layer === 'gate') {
       return `<b>Gate ${x.no}</b><dl class="facts"><dt>Opened by</dt><dd>${x.openedBy.map((p) => esc(c.markers.find((s) => s.pid === p)?.name || '?')).join(', ') || '—'}</dd></dl>`;
     }
+    if (x.layer === 'side') return `<b>${esc(x.label)}</b><dl class="facts"><dt>Kind</dt><dd>${esc(x.kind)}</dd></dl>`;
     return `<b>${esc(x.label)}</b>${x.layer === 'teleport' ? `<dl class="facts"><dt>Direction</dt><dd>${x.oneWay ? 'Entry → landing only' : 'Both ways'}</dd></dl>` : ''}`;
   }
 
@@ -184,7 +202,7 @@ const Maps = (() => {
     const info = $('#map-info');
     if (info) info.innerHTML = infoHtml(x);
     $('#reader').querySelectorAll('.map-row').forEach((tr) => tr.classList.toggle('active', tr.dataset.pid === pid));
-    if (x && m.layers[layerOf(x)] === false) { m.layers[layerOf(x)] = true; const cb = $(`[data-layer="${layerOf(x)}"]`); if (cb) cb.checked = true; }
+    if (x && !isOn(layerOf(x))) { m.layers[layerOf(x)] = true; const cb = $(`[data-layer="${layerOf(x)}"]`); if (cb) cb.checked = true; }
     m.view?.refresh();
     if (x && focus) m.view?.focus(x.pos);
   }
@@ -218,6 +236,8 @@ const Maps = (() => {
     const cam = new THREE.PerspectiveCamera(45, 1, 0.5, 4000);
     const controls = new OrbitControls(cam, canvas);
     controls.screenSpacePanning = false;
+    // Phones: one finger pans like a map, two fingers zoom and turn (the mouse keeps drag = rotate).
+    controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
     controls.maxPolarAngle = Math.PI * 0.48;
 
     // Frame the markers (the art also holds a far-off skyline).
@@ -259,7 +279,7 @@ const Maps = (() => {
         ? `<b>${esc(x.label)}</b><span>Lv ${fmtNum(x.lv)} · CP ${fmtNum(x.cp)}</span><span>${elems(x.elements)}</span>`
         : x.layer === 'relic' ? `<b>${esc(x.label)} ${x.no}</b><span>${x.rewards.map((r) => esc(r.name)).join(', ') || '—'}</span>`
           : x.layer === 'switch' ? `<b>${esc(x.name)}</b><span>Opens ${x.opens.map((n) => `gate ${n}`).join(', ') || '—'}</span>`
-            : x.layer === 'gate' ? `<b>Gate ${x.no}</b>` : `<b>${esc(x.label)}</b>`;
+            : x.layer === 'gate' ? `<b>Gate ${x.no}</b>` : x.layer === 'side' ? `<b>${esc(x.label)}</b><span>${esc(x.kind)}</span>` : `<b>${esc(x.label)}</b>`;
       tip.hidden = false;
       const b = box.getBoundingClientRect(), r = el.getBoundingClientRect();
       const left = Math.min(r.left - b.left, b.width - tip.offsetWidth - 4);
@@ -276,7 +296,7 @@ const Maps = (() => {
       el.className = `mk mk-${x.layer}`;
       el.style.display = 'none'; // placeLabels() shows it once the model is in
       el.textContent = x.layer === 'stage' ? stageNo(x.label) : x.layer === 'relic' ? (x.itemType === 'BGM' ? '♪' : x.itemType === 'Memory' ? 'M' : 'R')
-        : x.layer === 'gate' ? `G${x.no}` : x.layer === 'switch' ? `S${x.opens.length ? `→${x.opens.join(',')}` : ''}` : x.layer === 'teleport' ? 'T' : '★';
+        : x.layer === 'gate' ? `G${x.no}` : x.layer === 'switch' ? `S${x.opens.length ? `→${x.opens.join(',')}` : ''}` : x.layer === 'teleport' ? 'T' : x.layer === 'side' ? 'Q' : '★';
       el.onclick = () => { history.replaceState(null, '', href(c.id, x.pid)); select(x.pid, false); };
       el.onmouseenter = () => showTip(x, el);
       el.onmouseleave = () => { tip.hidden = true; };
@@ -289,7 +309,7 @@ const Maps = (() => {
     function placeLabels() {
       const w = canvas.clientWidth, h = canvas.clientHeight;
       for (const it of items) {
-        const on = ready && m.layers[layerOf(it.x)] !== false;
+        const on = ready && isOn(layerOf(it.x));
         tmp.copy(it.v).project(cam);
         const vis = on && tmp.z < 1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05;
         it.el.style.display = vis ? '' : 'none';

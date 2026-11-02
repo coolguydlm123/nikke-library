@@ -44,6 +44,7 @@ npm run deploy   # pushes dist/ to the gh-pages branch (one fresh commit each ti
 
 Every section follows the same layout so a lot of information fits on one screen, on a desktop or a phone.
 
+- **Section landing page (hub):** when nothing is picked yet, show `hubHtml({ title, text, groups })` from `public/app.js` (the home page uses it too): cards for the section's main areas, with counts and an optional icon/cover, so the section is usable on a phone without opening the sidebar.
 - **Page:** `head` block (`.scene-head`: crumb, `.scene-title`, one-line description), then `.stage-body` with `.card` sections, each with an `<h3>` title.
 - **Short key/value lists:** `<dl class="facts">`.
 - **Anything with more than ~4 rows or 2 columns:** a table, always `<div class="table-scroll"><table class="roster keep-cols">`.
@@ -57,4 +58,4 @@ Every section follows the same layout so a lot of information fits on one screen
   - `fmtDur(seconds)` → "3h 05m"
   - "—" for nothing; ×N for amounts; no units repeated in every cell when the header already has them ("ATK %", "Time (s)").
 - **Images in tables:** small icons (32–48 px) next to the name, never on their own row.
-- **Phones:** the top menu scrolls sideways and the sidebar folds into a "Browse" bar; tables scroll sideways inside `.table-scroll` rather than wrapping.
+- **Phones:** the top menu becomes a section dropdown and the sidebar folds into a "Browse" bar; tables scroll sideways inside `.table-scroll` rather than wrapping.

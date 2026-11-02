@@ -84,7 +84,7 @@ def main():
         print(f"  {field}: {os.path.getsize(src) / 2**20:.1f} MB -> {os.path.getsize(dst) / 2**20:.1f} MB")
         made += 1
     for name in os.listdir(OUT):
-        if name not in wanted:
+        if name.endswith(".glb") and name not in wanted:  # leave the thumbnails (tools/map-thumbs.py)
             os.remove(os.path.join(OUT, name))
             removed += 1
     print(f"{made} map(s) written, {skipped} up to date, {removed} removed -> {OUT}")

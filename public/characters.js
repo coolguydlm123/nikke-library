@@ -2,8 +2,7 @@
 const Characters = (() => {
   const c = {
     list: null,
-    rarity: store.get('charRarity', 'All'),
-    weapon: store.get('charWeapon', 'All'),
+    sel: store.get('charFilters', {}), // { rarity: ['SSR'], weapon: [], element: [], burst: [] }
     current: null,
     skillLevel: store.get('charSkillLevel', 10),
     favorite: store.get('charFavorite', false), // show favorite item skills where a Nikke has one
@@ -25,39 +24,65 @@ const Characters = (() => {
   async function enter() {
     if (!c.list) c.list = await (await apiFetch('/api/characters')).json();
     if (!c.cpData) c.cpData = await (await apiFetch('/api/cp-data')).json();
-    renderTabs();
     renderTree();
   }
 
-  // Rarity tabs, then a weapon type row; counts follow the other filter.
-  const WEAPONS = ['AR', 'SMG', 'SG', 'SR', 'RL', 'MG'];
-  const byRarity = (x) => c.rarity === 'All' || x.rarity === c.rarity;
-  const byWeapon = (x) => c.weapon === 'All' || x.weapon === c.weapon;
+  // Filter chips: several values within a group match any of them (OR), groups combine (AND),
+  // together with the sidebar's text filter. Shown in the sidebar and, on phones, on the landing page.
+  const FILTERS = [
+    { key: 'rarity', label: 'Rarity', values: ['SSR', 'SR', 'R'], of: (x) => [x.rarity] },
+    { key: 'weapon', label: 'Weapon', values: ['AR', 'SMG', 'SG', 'SR', 'RL', 'MG'], of: (x) => [x.weapon] },
+    { key: 'element', label: 'Element', values: ['Fire', 'Water', 'Wind', 'Electric', 'Iron'], of: (x) => x.element },
+    { key: 'burst', label: 'Burst', values: ['I', 'II', 'III', 'A'], names: { A: 'Any' }, of: (x) => [x.burst] },
+  ];
+  const picked = (key) => c.sel[key] || [];
+  const textMatch = (x) => {
+    const f = state.filter;
+    return !f || [x.name, x.class, x.weapon, x.burst && `burst ${x.burst}`, ...x.element].some((v) => v && String(v).toLowerCase().includes(f));
+  };
+  // `skip` leaves one group out, for that group's chip counts.
+  const passes = (x, skip) => textMatch(x) && FILTERS.every((g) => g.key === skip || !picked(g.key).length || g.of(x).some((v) => picked(g.key).includes(v)));
+  const matches = () => c.list.filter((x) => passes(x));
+  const anyPicked = () => FILTERS.some((g) => picked(g.key).length);
 
-  function renderTabs() {
-    const tabs = ['All', 'SSR', 'SR', 'R'];
-    const weaponName = (w) => c.list.find((x) => x.weapon === w)?.weaponName || w;
-    $('#cat-tabs').innerHTML = tabs.map((t) => {
-      const n = c.list.filter((x) => (t === 'All' || x.rarity === t) && byWeapon(x)).length;
-      return `<button class="cat-tab ${c.rarity === t ? 'active' : ''}" data-rarity="${t}">${t}<span class="n">${n}</span></button>`;
-    }).join('') + `<div class="mode-row wrap">${['All', ...WEAPONS].map((w) => {
-      const n = c.list.filter((x) => byRarity(x) && (w === 'All' || x.weapon === w)).length;
-      return `<button class="mode-chip ${c.weapon === w ? 'active' : ''}" data-weapon="${w}" title="${esc(w === 'All' ? 'All weapons' : weaponName(w))}">${w === 'All' ? 'All weapons' : w} <span class="key">${n}</span></button>`;
-    }).join('')}</div>`;
-    $('#cat-tabs').querySelectorAll('[data-rarity]').forEach((b) => b.onclick = () => {
-      c.rarity = b.dataset.rarity; store.set('charRarity', c.rarity); renderTabs(); renderTree();
+  function filtersHtml() {
+    return `<div class="char-filters">${FILTERS.map((g) => {
+      const base = c.list.filter((x) => passes(x, g.key));
+      return `<div class="chip-row"><span class="chip-label">${g.label}</span>${g.values.map((v) => {
+        const on = picked(g.key).includes(v);
+        const n = base.filter((x) => g.of(x).includes(v)).length;
+        return `<button class="cat-tab ${on ? 'active' : ''}" data-g="${g.key}" data-v="${esc(v)}" aria-pressed="${on}">${esc(g.names?.[v] || v)}<span class="n">${n}</span></button>`;
+      }).join('')}</div>`;
+    }).join('')}
+      <div class="chip-sum key"><b>${matches().length}</b> of ${c.list.length} match${anyPicked() || state.filter ? ' <button class="link-btn" data-clear>Clear all</button>' : ''}</div></div>`;
+  }
+
+  function bindFilters(root) {
+    root.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => {
+      const list = picked(b.dataset.g);
+      c.sel = { ...c.sel, [b.dataset.g]: list.includes(b.dataset.v) ? list.filter((v) => v !== b.dataset.v) : [...list, b.dataset.v] };
+      store.set('charFilters', c.sel);
+      refresh();
     });
-    $('#cat-tabs').querySelectorAll('[data-weapon]').forEach((b) => b.onclick = () => {
-      c.weapon = b.dataset.weapon; store.set('charWeapon', c.weapon); renderTabs(); renderTree();
+    root.querySelector('[data-clear]')?.addEventListener('click', () => {
+      c.sel = {}; store.set('charFilters', c.sel);
+      if (state.filter) { state.filter = ''; $('#filter').value = ''; }
+      refresh();
     });
   }
 
-  // Grouped by manufacturer; the filter matches name, class, weapon, element or burst.
+  const refresh = () => renderTree();
+
+  function renderTabs() {
+    $('#cat-tabs').innerHTML = filtersHtml();
+    bindFilters($('#cat-tabs'));
+  }
+
+  // Grouped by manufacturer; also redraws the chips (their counts follow the text filter)
+  // and the landing gallery when it is showing.
   function renderTree() {
-    const f = state.filter;
-    const match = (x) => !f || [x.name, x.class, x.weapon, x.burst && `burst ${x.burst}`, ...x.element]
-      .some((v) => v && String(v).toLowerCase().includes(f));
-    const list = c.list.filter((x) => byRarity(x) && byWeapon(x) && match(x));
+    renderTabs();
+    const list = matches();
     const corps = [...new Set(list.map((x) => x.corporation))]
       .sort((a, b) => (CORP_ORDER.indexOf(a) + 1 || 99) - (CORP_ORDER.indexOf(b) + 1 || 99));
     const onOverload = location.hash.startsWith('#/character/overload');
@@ -73,6 +98,7 @@ const Characters = (() => {
       </details>`;
     }).join('') || '<p class="key" style="padding:12px">No matches.</p>');
     $('#tree .scene-link.active')?.scrollIntoView({ block: 'nearest' });
+    if ($('#char-hub-gallery')) renderGallery();
   }
 
   async function route() {
@@ -82,19 +108,44 @@ const Characters = (() => {
     const res = await apiFetch('/api/character?code=' + m[1]);
     if (!res.ok) { $('#reader').innerHTML = '<div class="error">Character not found.</div>'; return; }
     c.current = await res.json();
+    store.set('charLast', c.current.code);
     renderTree();
     renderCharacter();
     $('#reader').scrollTop = 0;
+    // #/character/<code>/cp opens the page at its CP calculator (the hub's CP card).
+    if (/\/cp$/.test(location.hash)) $('#reader .cp-card')?.scrollIntoView({ block: 'start' });
   }
 
+  // Landing page: tools first, then every Nikke's icon grouped by manufacturer like the sidebar.
   function overview() {
     const count = (r) => c.list.filter((x) => x.rarity === r).length;
-    $('#reader').innerHTML = `<div class="empty"><h1>Characters</h1>
-      <p>${c.list.length} Nikkes: ${count('SSR')} SSR, ${count('SR')} SR, ${count('R')} R.</p>
-      <p>Pick a Nikke for skills, weapon and stories.</p>
-      <p><a href="#/character/overload">Overload gear →</a> what modified gear lines can roll, the chances and the costs.</p></div>
-      <div class="char-gallery">${c.list.filter((x) => x.icon).map((x) => `<a href="${href(x.code)}" title="${esc(x.name)}">
-        ${gameImg('icons-char', x.icon)}<span>${esc(x.name)}</span></a>`).join('')}</div>`;
+    const last = c.list.find((x) => x.code === store.get('charLast', null)) || c.list[0];
+    $('#reader').innerHTML = hubHtml({
+      title: 'Characters',
+      text: `${c.list.length} Nikkes: ${count('SSR')} SSR, ${count('SR')} SR, ${count('R')} R. Pick one for skills, weapon, CP and stories.`,
+      groups: [{ title: 'Tools', cards: [
+        { href: `${href(last.code)}/cp`, title: 'CP calculator', text: `On every Nikke's page; opens ${last.name}.` },
+        { href: '#/character/overload', title: 'Overload gear', text: 'What modified gear lines roll, the chances and the costs.' },
+      ] }],
+    });
+    $('#reader .home').insertAdjacentHTML('beforeend', '<div id="char-hub-filters"></div><div id="char-hub-gallery"></div>');
+    renderGallery();
+  }
+
+  // The landing gallery: filter chips (phones; the sidebar has them on wider screens), then the
+  // matching Nikkes grouped by manufacturer.
+  function renderGallery() {
+    $('#char-hub-filters').innerHTML = filtersHtml();
+    bindFilters($('#char-hub-filters'));
+    const list = matches().filter((x) => x.icon);
+    const corps = [...new Set(list.map((x) => x.corporation))]
+      .sort((a, b) => (CORP_ORDER.indexOf(a) + 1 || 99) - (CORP_ORDER.indexOf(b) + 1 || 99));
+    $('#char-hub-gallery').innerHTML = corps.map((corp) => {
+      const members = list.filter((x) => x.corporation === corp);
+      return `<h2 class="hub-head">${esc(corp)} <span class="n">${members.length}</span></h2>
+        <div class="char-gallery">${members.map((x) => `<a href="${href(x.code)}" title="${esc(x.name)}">
+          ${gameImg('icons-char', x.icon)}<span>${esc(x.name)}</span></a>`).join('')}</div>`;
+    }).join('') || '<p class="key">No Nikke matches these filters.</p>';
   }
 
   // ---------- Overload gear ----------

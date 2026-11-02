@@ -65,7 +65,14 @@ const Raids = (() => {
     let url = null;
     if ((m = h.match(/^#\/raid\/(union|solo)\/(\d+)\/([\w-]+)/))) url = `/api/raid?kind=${m[1]}&season=${m[2]}&boss=${m[3]}`;
     else if ((m = h.match(/^#\/raid\/(intercept|museum)\/([\w-]+)/))) url = `/api/raid?kind=${m[1]}&boss=${m[2]}`;
-    if (!url) { r.current = null; renderTree(); return overview(); }
+    if (!url) {
+      r.current = null;
+      m = h.match(/^#\/raids\/(union|solo)(?:\/(\d+))?/);
+      if (m && m[1] !== r.kind) { r.kind = m[1]; store.set('raidKind', r.kind); renderTabs(); }
+      renderTree();
+      $('#reader').scrollTop = 0;
+      return m ? (m[2] ? seasonHub(m[1], Number(m[2])) : seasonsHub(m[1])) : overview();
+    }
     const res = await apiFetch(url);
     if (!res.ok) { $('#reader').innerHTML = '<div class="error">Raid not found.</div>'; return; }
     r.current = await res.json();
@@ -75,13 +82,58 @@ const Raids = (() => {
     $('#reader').scrollTop = 0;
   }
 
+  // Landing hubs: the section, all seasons of a kind, one season's bosses.
+  const artSrc = (b) => (b.art ? `img/icons-monster/${b.art.toLowerCase()}.webp` : null);
+  const diffText = (b) => (b.difficulties || []).map((d) => d.difficulty).filter((d) => d !== 'Normal').join(', ');
+  const bossCard = (kind, b, season, text) => ({
+    href: href(kind, b.key, season), title: b.short || b.name, img: artSrc(b),
+    text: [text, levelRange(b), diffText(b)].filter(Boolean).join(' · '),
+  });
+  const SOLO_LATEST = 8;
+
   function overview() {
     const c = r.catalogue;
+    const [union, solo] = [c.union.seasons[0], c.solo.seasons];
     const count = (k) => c[k]?.seasons.reduce((s, g) => s + g.bosses.length, 0) || 0;
-    $('#reader').innerHTML = `<div class="empty"><h1>Raids</h1>
-      <p>${c.union.seasons.length} Union Raid seasons, ${c.solo.seasons.length} Solo Raid seasons,
-      ${count('intercept')} Interception bosses and ${count('museum')} Solo Raid Museum bosses.</p>
-      <p>Pick a boss from the left. Each page shows every difficulty and tier together.</p></div>`;
+    $('#reader').innerHTML = hubHtml({
+      title: 'Raids',
+      text: `${c.union.seasons.length} Union Raid seasons, ${solo.length} Solo Raid seasons, ${count('intercept')} Interception and ${count('museum')} Museum bosses.`,
+      groups: [
+        { title: `Union Raid · latest (${union.title})`, cards: union.bosses.map((b) => bossCard('union', b, union.id, b.slot ? `Boss ${b.slot}` : null)) },
+        { title: 'Solo Raid · latest seasons', cards: solo.slice(0, SOLO_LATEST).flatMap((s) => s.bosses.map((b) => bossCard('solo', b, s.id, s.title))) },
+        { title: 'All seasons', cards: ['union', 'solo'].map((k) => ({
+          href: `#/raids/${k}`, title: c[k].label, n: `${c[k].seasons.length} seasons`, img: artSrc(c[k].seasons[0].bosses[0]),
+          text: `Every ${c[k].label} season, newest first.` })) },
+        ...['intercept', 'museum'].flatMap((k) => c[k].seasons.map((g) => ({
+          title: k === 'museum' ? `${c.museum.label} · ${g.title}` : g.title,
+          cards: g.bosses.map((b) => bossCard(k, b, null, k === 'museum' && b.soloSeason ? `Solo S${b.soloSeason}` : null)),
+        }))),
+      ],
+    });
+  }
+
+  function seasonsHub(kind) {
+    const c = r.catalogue[kind];
+    $('#reader').innerHTML = hubHtml({
+      title: c.label,
+      text: `${c.seasons.length} seasons, newest first.`,
+      groups: [{ cards: c.seasons.map((s) => ({
+        // A one-boss season (Solo Raid) goes straight to the boss.
+        href: s.bosses.length === 1 ? href(kind, s.bosses[0].key, s.id) : `#/raids/${kind}/${s.id}`, title: s.title, img: artSrc(s.bosses[0]),
+        n: `${s.bosses.length} boss${s.bosses.length > 1 ? 'es' : ''}`, text: s.bosses.map((b) => b.name).join(', '),
+      })) }],
+    });
+  }
+
+  function seasonHub(kind, seasonId) {
+    const c = r.catalogue[kind];
+    const s = c.seasons.find((x) => x.id === seasonId);
+    if (!s) { $('#reader').innerHTML = '<div class="error">Season not found.</div>'; return; }
+    $('#reader').innerHTML = hubHtml({
+      title: `${c.label} · ${s.title}`,
+      groups: [{ cards: s.bosses.map((b) => bossCard(kind, b, s.id, b.slot ? `Boss ${b.slot}` : null)) },
+        { cards: [{ href: `#/raids/${kind}`, title: `All ${c.label} seasons`, n: c.seasons.length }] }],
+    });
   }
 
   const head = (crumb, title, desc, badges = '') => `<div class="scene-head">

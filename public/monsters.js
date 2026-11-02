@@ -2,12 +2,15 @@
 const Monsters = (() => {
   const m = {
     list: null,
-    generation: store.get('monGeneration', 'All'), // 'All' | 'Rapture' | 'Dark Matter'
+    generation: store.get('monGeneration', 'All'), // 'All' | 'Rapture' | 'Dark Matter' (MonsterModelTable.monster_generation)
+    cls: store.get('monClass', 'All'), // in-game class (Husk … Queen); a model matches if any variant has it
     current: null,
     variant: null,
   };
   const href = (id, variant) => `#/monster/${id}${variant ? `/${variant}` : ''}`;
   const GRADES = ['Boss', 'Centurion', 'Elite', 'Minion', 'Thrash'];
+  const GENERATIONS = ['Rapture', 'Dark Matter'];
+  const CLASSES = ['Husk', 'Servant', 'Master', 'Exceed', 'Lord', 'Tyrant', 'Heretic', 'Queen'];
   const KIND_LABEL = { campaign: 'Campaign', tower: 'Towers', raid: 'Raids', event: 'Events', other: 'Other' };
   const gradeClass = (g) => `grade-${String(g || '').toLowerCase()}`;
   const elemDot = (e) => `<span class="elem elem-${esc(e.toLowerCase())}" title="${esc(e)}"></span>`;
@@ -20,17 +23,35 @@ const Monsters = (() => {
     renderTree();
   }
 
-  const byGeneration = (x) => m.generation === 'All' || x.generation === m.generation;
+  const byGeneration = (x, g = m.generation) => g === 'All' || x.generation === g;
+  const byClass = (x, c = m.cls) => c === 'All' || x.classes.includes(c);
 
+  // Generation tabs, then a class row; each count follows the other filter.
   function renderTabs() {
-    $('#cat-tabs').innerHTML = ['All', 'Rapture', 'Dark Matter'].map((g) => {
-      const n = m.list.filter((x) => g === 'All' || x.generation === g).length;
+    $('#cat-tabs').innerHTML = ['All', ...GENERATIONS].map((g) => {
+      const n = m.list.filter((x) => byGeneration(x, g) && byClass(x)).length;
       return `<button class="cat-tab ${m.generation === g ? 'active' : ''}" data-gen="${g}">${g}<span class="n">${n}</span></button>`;
-    }).join('');
-    $('#cat-tabs').querySelectorAll('[data-gen]').forEach((b) => b.onclick = () => {
-      m.generation = b.dataset.gen; store.set('monGeneration', m.generation); renderTabs(); renderTree();
-      if (!m.current) overview();
-    });
+    }).join('') + `<div class="mode-row wrap">${['All', ...CLASSES].map((c) => {
+      const n = m.list.filter((x) => byGeneration(x) && byClass(x, c)).length;
+      return `<button class="mode-chip ${m.cls === c ? 'active' : ''}" data-cls="${c}">${c === 'All' ? 'All classes' : c} <span class="key">${n}</span></button>`;
+    }).join('')}</div>`;
+    $('#cat-tabs').querySelectorAll('[data-gen]').forEach((b) => b.onclick = () => setFilter('generation', b.dataset.gen));
+    $('#cat-tabs').querySelectorAll('[data-cls]').forEach((b) => b.onclick = () => setFilter('cls', b.dataset.cls));
+  }
+
+  function setFilter(key, value) {
+    m[key] = value;
+    store.set(key === 'cls' ? 'monClass' : 'monGeneration', value);
+    renderTabs();
+    renderTree();
+    if (!m.current) overview();
+  }
+
+  // The same two filters as selects on the landing page, for phones (the sidebar is folded there).
+  function filterBar() {
+    const sel = (key, all, values) => `<select class="mon-select" data-filter="${key}">${['All', ...values].map((v) =>
+      `<option value="${esc(v)}" ${m[key] === v ? 'selected' : ''}>${esc(v === 'All' ? all : v)}</option>`).join('')}</select>`;
+    return `<div class="mon-filters">${sel('generation', 'All generations', GENERATIONS)}${sel('cls', 'All classes', CLASSES)}</div>`;
   }
 
   const label = (x) => `${x.name}${x.variant ? ` (${x.variant})` : ''}`;
@@ -39,9 +60,9 @@ const Monsters = (() => {
   function filtered() {
     const plain = (s) => String(s).toLowerCase().replace(/\./g, ''); // "psid" finds P.S.I.D.
     const f = plain(state.filter);
-    const match = (x) => !f || [label(x), x.prefab, x.grade, x.role, x.attribute, x.generation, ...x.codes, ...x.elements, ...x.uiGrades]
+    const match = (x) => !f || [label(x), x.prefab, x.grade, x.role, x.attribute, x.generation, ...x.codes, ...x.elements, ...x.uiGrades, ...x.classes]
       .some((v) => v && plain(v).includes(f));
-    return m.list.filter((x) => byGeneration(x) && match(x));
+    return m.list.filter((x) => byGeneration(x) && byClass(x) && match(x));
   }
 
   function renderTree() {
@@ -62,7 +83,7 @@ const Monsters = (() => {
 
   async function route() {
     const r = location.hash.match(/^#\/monster\/(\d+)(?:\/(\d+))?/);
-    if (!r) { m.current = null; renderTree(); return overview(); }
+    if (!r) { m.current = null; renderTree(); return overview(); } // #/monsters or a hub filter #/monsters/<facet>/<value>
     if (m.current?.id !== Number(r[1])) {
       const res = await apiFetch('/api/monster?id=' + r[1]);
       if (!res.ok) { $('#reader').innerHTML = '<div class="error">Monster not found.</div>'; return; }
@@ -75,15 +96,53 @@ const Monsters = (() => {
     renderMonster();
   }
 
+  // Landing hub: cards to browse by grade, by where monsters spawn, by element and by
+  // generation (#/monsters/<facet>/<value>), then the gallery of the current selection.
+  const ELEMENTS = ['Fire', 'Water', 'Wind', 'Electric', 'Iron'];
+  const FACETS = {
+    grade: { title: 'By grade', values: GRADES, test: (x, v) => x.grade === v },
+    where: {
+      title: 'By where they appear',
+      values: [...Object.keys(KIND_LABEL), 'none'],
+      label: (v) => (v === 'none' ? 'Never spawn' : KIND_LABEL[v]),
+      test: (x, v) => (v === 'none' ? !Object.keys(x.appears || {}).length : !!x.appears?.[v]),
+    },
+    element: { title: 'By element', values: ELEMENTS, test: (x, v) => x.elements.includes(v) },
+    class: { title: 'By class', values: CLASSES, test: (x, v) => x.classes.includes(v) },
+  };
+  const facetHref = (k, v) => `#/monsters/${k}/${encodeURIComponent(v)}`;
+
   function overview() {
-    const list = filtered();
+    const sel = location.hash.match(/^#\/monsters\/(\w+)\/([^/]+)/);
+    const facet = sel && FACETS[sel[1]] ? { key: sel[1], value: decodeURIComponent(sel[2]), ...FACETS[sel[1]] } : null;
+    const base = filtered(); // generation, class and text filters
+    const list = base.filter((x) => !facet || facet.test(x, facet.value));
     const spawning = m.list.filter((x) => Object.keys(x.appears || {}).length).length;
-    $('#reader').innerHTML = `<div class="empty"><h1>Monsters</h1>
-      <p>${m.list.length} monster models (${fmtNum(m.list.reduce((n, x) => n + x.variants, 0))} variants by element code, raid and event version);
-        ${spawning} of them spawn somewhere in the campaign, towers, raids or events.</p>
-      <p>Pick a monster for its variants, skills, parts and where it appears.</p></div>
+    const used = new Set(); // a different monster on each card where possible
+    const iconOf = (xs) => {
+      const hit = xs.find((x) => x.icon && !used.has(x.icon)) || xs.find((x) => x.icon);
+      if (!hit) return null;
+      used.add(hit.icon);
+      return `img/icons-monster/${hit.icon}.webp`;
+    };
+    const groups = Object.entries(FACETS).map(([k, f]) => ({
+      title: f.title,
+      cards: f.values.map((v) => {
+        const xs = base.filter((x) => f.test(x, v));
+        return xs.length && { href: facetHref(k, v), title: f.label ? f.label(v) : v, n: xs.length, img: iconOf(xs) };
+      }).filter(Boolean),
+    })).filter((g) => g.cards.length);
+    const heading = facet ? `${facet.label ? facet.label(facet.value) : facet.value} · ${fmtNum(list.length)}` : `All monsters · ${fmtNum(list.length)}`;
+    $('#reader').innerHTML = hubHtml({
+      title: 'Monsters',
+      text: `${m.list.length} monster models (${fmtNum(m.list.reduce((n, x) => n + x.variants, 0))} variants by element code, raid and event version); ` +
+        `${spawning} of them spawn somewhere. Pick a monster for its variants, skills, parts and where it appears.`,
+      groups,
+    }).replace('</p>', `</p>${filterBar()}`) + `<div class="mon-browse"><div class="mon-gallery-head"><h2 class="hub-head">${esc(heading)}</h2>${facet ? '<a class="nav-btn" href="#/monsters">Show all</a>' : ''}</div>
       <div class="char-gallery mon-gallery">${list.map((x) => `<a href="${href(x.id)}" title="${esc(label(x))}">
-        ${x.icon ? gameImg('icons-monster', x.icon) : '<span class="mon-noart"></span>'}<span>${esc(label(x))}</span></a>`).join('')}</div>`;
+        ${x.icon ? gameImg('icons-monster', x.icon) : '<span class="mon-noart"></span>'}<span>${esc(label(x))}</span></a>`).join('') || '<p class="key">No matches.</p>'}</div></div>`;
+    $('#reader').querySelectorAll('[data-filter]').forEach((el) => el.onchange = () => setFilter(el.dataset.filter, el.value));
+    if (facet) $('.mon-gallery-head')?.scrollIntoView(); else $('#reader').scrollTop = 0;
   }
 
   // ---------- monster page ----------
@@ -125,12 +184,12 @@ const Monsters = (() => {
   function variantsCard(x) {
     if (x.variants.length < 2) return '';
     return `<section class="card"><h3>Variants <span class="sub">${x.variants.length}</span></h3>
-      <div class="table-scroll"><table class="roster keep-cols sticky-first mon-table mon-variants"><thead><tr><th>Name</th><th class="num">ID</th><th>Grade</th><th>Element</th><th>Weak to</th>
+      <div class="table-scroll"><table class="roster keep-cols sticky-first mon-table mon-variants"><thead><tr><th>Name</th><th class="num">ID</th><th>Class</th><th>Element</th><th>Weak to</th>
         <th class="num">Spawns</th></tr></thead><tbody>
       ${x.variants.map((v) => `<tr class="${v.id === m.variant.id ? 'is-target' : ''}" data-href="${href(x.id, v.id)}">
         <td><div class="roster-name">${gameImg('icons-monster', x.icon, 'mon-row-icon')}<a href="${href(x.id, v.id)}">${esc(v.name)}</a></div></td>
         <td class="num key">${v.id}</td>
-        <td><span class="grade ${gradeClass(v.uiGrade)}">${esc(v.uiGrade)}</span></td>
+        <td><span class="grade ${gradeClass(v.uiGrade)}">${esc(v.monsterClass)}</span></td>
         <td>${elems(v.elements)}</td><td>${elems(v.weakTo)}</td>
         <td class="num">${fmtNum(v.appearances.reduce((n, g) => n + g.count, 0) || null)}</td></tr>`).join('')}
       </tbody></table></div>
@@ -159,7 +218,7 @@ const Monsters = (() => {
         <div class="scene-title">${esc(x.name)}${x.variant ? ` <span class="key">${esc(x.variant)}</span>` : ''}</div>
         <div class="toolbar">
           ${related}
-          ${x.uiGrades.map((g) => badge(esc(g), `grade ${gradeClass(g)}`)).join('')}
+          ${x.classes.map((c) => badge(esc(c), `grade ${gradeClass(c === 'Husk' ? 'Selfless' : c)}`)).join('')}
           ${x.elements.map((e) => badge(`${elemDot(e)} ${esc(e)}`, 'with-dot')).join('')}
           ${badge(esc(x.role))}${badge(esc(x.move === 'Fly' ? 'Flying' : 'Ground'))}
         </div>
@@ -176,7 +235,7 @@ const Monsters = (() => {
         ${variantsCard(x)}
         <section class="card"><h3>${esc(v.name)} <span class="sub">${v.id}</span></h3><dl class="facts">
           ${v.description ? `<dt>Info</dt><dd class="prose">${esc(v.description).replace(/\n/g, '<br>')}</dd>` : ''}
-          <dt>Grade</dt><dd><span class="grade ${gradeClass(v.uiGrade)}">${esc(v.uiGrade)}</span></dd>
+          <dt>Class</dt><dd><span class="grade ${gradeClass(v.uiGrade)}">${esc(v.monsterClass)}</span></dd>
           <dt>Element</dt><dd>${elems(v.elements)}</dd>
           <dt>Weak to</dt><dd>${elems(v.weakTo)}</dd>
           ${v.passive ? `<dt>Passive</dt><dd class="key">${v.passive}</dd>` : ''}

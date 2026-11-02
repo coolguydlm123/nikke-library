@@ -22,13 +22,15 @@ const Minigames = (() => {
     const main = games.filter(([id]) => MAIN_GAMES.includes(id));
     $('#cat-tabs').innerHTML = games.map(([id, g]) =>
       `<a class="cat-tab ${game === id ? 'active' : ''}" href="#/minigame/${id}">${esc(g.name)}<span class="n">${g.count}</span></a>`).join('')
-      + `<select class="mg-pick" aria-label="Minigame"><optgroup label="Minigames">${main.map(opt).join('')}</optgroup>
+      + `<select class="mg-pick" aria-label="Minigame"><option value="" ${game ? '' : 'selected'}>All minigames</option><optgroup label="Minigames">${main.map(opt).join('')}</optgroup>
         <optgroup label="Event minigames">${games.filter(([id]) => !MAIN_GAMES.includes(id)).map(opt).join('')}</optgroup></select>`;
-    $('#cat-tabs .mg-pick').onchange = (e) => { location.hash = `#/minigame/${e.target.value}`; };
+    $('#cat-tabs .mg-pick').onchange = (e) => { location.hash = e.target.value ? `#/minigame/${e.target.value}` : HUB; };
     $('#cat-tabs .cat-tab.active')?.scrollIntoView({ block: 'nearest' }); // the tab list scrolls (one tab per game)
   }
   const MAIN_GAMES = ['tts', 'dicetrack', 'textadv'];
-  const gameOf = (hash) => hash.match(/^#\/minigame\/(\w+)/)?.[1] || 'tts';
+  // null on the hub (#/minigames, or #/minigame with no game).
+  const gameOf = (hash) => hash.match(/^#\/minigame\/(\w+)/)?.[1] || null;
+  const HUB = '#/minigames';
 
   // Song filter: matches title, artist or album name.
   const songHit = (s, f) => !f || [s.name, s.artist, albumName(s.album)].some((v) => v.toLowerCase().includes(f));
@@ -72,6 +74,7 @@ const Minigames = (() => {
     const h = location.hash;
     renderTabs();
     const game = gameOf(h);
+    if (!game) return hubPage();
     if (game !== 'tts') {
       m.page = { kind: 'extra' };
       return renderExtra(game, h.replace(/^#\/minigame\/\w+\/?/, '').split('/').filter(Boolean), false);
@@ -97,6 +100,31 @@ const Minigames = (() => {
     $('#reader .is-target')?.scrollIntoView({ block: 'center' });
   }
 
+  // Landing page: a card per minigame, so the section works on a phone without the tab list.
+  function hubPage() {
+    m.page = { kind: 'hub' };
+    m.extraTree = '';
+    renderTree();
+    const t = m.tts;
+    const g = m.games;
+    const img = (name) => (name ? `img/icons-event/${name}.webp` : null);
+    const main = [
+      { id: 'tts', cover: t.albums.find((a) => a.cover)?.cover, text: `Rhythm game: ${t.songs.length} songs across ${t.albums.length} albums.`, n: `${t.songs.length} songs` },
+      g.dicetrack && { id: 'dicetrack', text: 'Roll dice around a looping board for lap and square rewards.', n: `${g.dicetrack.count} squares` },
+      g.textadv && { id: 'textadv', text: 'A survival text adventure with many endings.', n: `${g.textadv.count} routes` },
+    ].filter(Boolean);
+    const events = Object.entries(g).filter(([id, x]) => x && !MAIN_GAMES.includes(id));
+    $('#reader').innerHTML = hubHtml({
+      title: 'Minigames',
+      text: `${main.length + events.length} minigames: the three standing ones, and every event minigame with its rules, stages and rewards.`,
+      groups: [
+        { title: 'Minigames', cards: main.map((x) => ({ href: `#/minigame/${x.id}`, title: g[x.id].name, text: x.text, n: x.n, img: x.cover ? `img/tts/${x.cover}.webp` : img(g[x.id].img) })) },
+        { title: 'Event minigames', cards: events.map(([id, x]) => ({ href: `#/minigame/${id}`, title: x.name, text: x.text, img: img(x.img) })) },
+      ],
+    });
+    $('#reader').scrollTop = 0;
+  }
+
   // Re-render the current page when the sidebar filter changes (song tables filter live).
   function rerender() {
     if (m.page?.kind === 'songs') songsPage();
@@ -118,7 +146,7 @@ const Minigames = (() => {
         </dl></section>
         <section class="card"><h3>Albums <span class="sub">${t.albums.length}</span></h3>
           <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>Album</th><th class="num">Songs</th><th>Release</th><th>Access</th></tr></thead><tbody>
-          ${t.albums.map((a) => `<tr><td><a href="${base}/songs/${a.id}">${esc(a.name)}</a></td><td class="num">${a.songs.length || '<span class="key">not in data yet</span>'}</td>
+          ${t.albums.map((a) => `<tr><td><a class="roster-name" href="${base}/songs/${a.id}">${gameImg('tts', a.cover, 'tts-cover')}<span>${esc(a.name)}</span></a></td><td class="num">${a.songs.length || '<span class="key">not in data yet</span>'}</td>
             <td>${day(a.release) || '<span class="key">launch</span>'}</td><td>${a.shop ? 'Paid pack' : 'Included'}</td></tr>`).join('')}
           </tbody></table></div></section>
         ${t.tips.length ? `<section class="card"><h3>Loading tips</h3><ul class="tips">${t.tips.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></section>` : ''}
@@ -153,7 +181,7 @@ const Minigames = (() => {
       ? `${t.songs.length} songs across ${t.albums.length} albums.`
       : [album.release ? `Released ${day(album.release)}` : 'Available from launch', album.shop ? 'Paid pack' : 'Included'].join(' · ');
     $('#reader').innerHTML = head([t.name, 'Songs'], esc(all ? 'All songs' : album.name),
-      `<p class="album-desc">${desc}${state.filter ? ` · ${songs.length} matching “${esc(state.filter)}”` : ''}</p>`) + `
+      `${album?.cover ? gameImg('tts', album.cover, 'tts-album-cover') : ''}<p class="album-desc">${desc}${state.filter ? ` · ${songs.length} matching “${esc(state.filter)}”` : ''}</p>`) + `
       <div class="stage-body"><section class="card">
         ${songs.length ? `<div class="table-scroll"><table class="roster keep-cols song-table"><thead><tr>
           <th class="num">#</th><th>Song</th>${all ? '<th>Album</th>' : ''}
@@ -162,7 +190,7 @@ const Minigames = (() => {
           <th>Unlock</th><th>Jukebox</th></tr></thead><tbody>
           ${songs.map((s, i) => `<tr class="${m.page.highlight === s.id ? 'is-target' : ''}">
             <td class="num key">${i + 1}</td>
-            <td><div class="track-name">${esc(s.name)}</div><div class="key">${esc(s.artist)}</div></td>
+            <td><div class="roster-name">${gameImg('tts', s.cover, 'tts-cover')}<div><div class="track-name">${esc(s.name)}</div><div class="key">${esc(s.artist)}</div></div></div></td>
             ${all ? `<td><a href="${base}/songs/${s.album}">${esc(albumName(s.album))}</a></td>` : ''}
             ${s.levels.map(levelCell).join('')}
             <td class="obtain">${unlockText(s)}</td>

@@ -166,6 +166,8 @@ async function init() {
   });
   // Phones: the sidebar folds into a "Browse" bar; picking something folds it again.
   $('#browse-toggle').onclick = () => setBrowse(!$('.sidebar').classList.contains('open'));
+  $('#nav-select').innerHTML = `<option value="home">Home</option>${SECTIONS.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}`;
+  $('#nav-select').onchange = (e) => { location.hash = e.target.value === 'home' ? '#/' : SECTIONS.find((s) => s.id === e.target.value).href; };
   $('#tree').addEventListener('click', (e) => { if (e.target.closest('a')) setBrowse(false); });
   window.addEventListener('hashchange', dispatch);
   dispatch();
@@ -183,6 +185,7 @@ function enterSection(name) {
   if (section === name) return false;
   section = name;
   document.querySelectorAll('.nav-item[data-section]').forEach((a) => a.classList.toggle('active', a.dataset.section === name));
+  $('#nav-select').value = name;
   $('#browse-toggle').firstChild.textContent = `Browse ${SECTIONS.find((s) => s.id === name)?.title || ''} `;
   state.filter = '';
   $('#filter').value = '';
@@ -207,20 +210,32 @@ const SECTIONS = [
   { id: 'monsters', href: '#/monsters', title: 'Monsters', text: 'Every Rapture: art, element, grade and where it appears.' },
   { id: 'maps', href: '#/maps', title: 'Maps', text: 'Campaign fields in 3D with every stage, relic, switch and teleport.' },
   { id: 'characters', href: '#/characters', title: 'Characters', text: 'Nikke profiles, costumes and the CP calculator.' },
-  { id: 'minigames', href: '#/minigame/tts', title: 'Minigames', text: 'Tracing the Stars, VOLT TRIP, Fading Affection and every event minigame.' },
-  { id: 'progression', href: '#/progression/outpost', title: 'Progression', text: 'Outpost, simulation room and level costs.' },
+  { id: 'minigames', href: '#/minigames', title: 'Minigames', text: 'Tracing the Stars, VOLT TRIP, Fading Affection and every event minigame.' },
+  { id: 'progression', href: '#/progression', title: 'Progression', text: 'Outpost, simulation room and level costs.' },
   { id: 'jukebox', href: '#/jukebox', title: 'Jukebox', text: 'Albums and tracks, and the story scenes that play them.' },
 ];
 
+// A landing page of cards: the home page, and each section's own hub (README "Page patterns").
+// groups: [{ title?, cards: [{ href, title, text?, n?, img? }] }]; img is an icon/cover URL.
+function hubHtml({ title, text, groups }) {
+  return `<div class="home">
+    <h1>${esc(title)}</h1>
+    ${text ? `<p class="home-sub">${esc(text)}</p>` : ''}
+    ${groups.map((g) => `${g.title ? `<h2 class="hub-head">${esc(g.title)}</h2>` : ''}
+      <div class="home-grid">${g.cards.map((c) => `<a class="home-card${c.img ? ' has-img' : ''}" href="${c.href}">
+        ${c.img ? `<img class="hub-img" src="${esc(c.img)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+        <div><b>${esc(c.title)}</b>${c.n != null && c.n !== '' ? ` <span class="n">${esc(String(c.n))}</span>` : ''}
+        ${c.text ? `<span>${esc(c.text)}</span>` : ''}</div></a>`).join('')}</div>`).join('')}
+  </div>`;
+}
+
 function renderHome() {
   const stories = state.catalogue.reduce((n, c) => n + c.groups.reduce((s, g) => s + g.scenes.length, 0), 0);
-  $('#reader').innerHTML = `<div class="home">
-    <h1>Nikke Library</h1>
-    <p class="home-sub">A datamine library of NIKKE: pick a section.</p>
-    <div class="home-grid">${SECTIONS.map((s) => `<a class="home-card" href="${s.href}">
-      <b>${esc(s.title)}</b>${s.id === 'stories' ? ` <span class="n">${stories.toLocaleString('en-US')} scenes</span>` : ''}
-      <span>${esc(s.text)}</span></a>`).join('')}</div>
-  </div>`;
+  $('#reader').innerHTML = hubHtml({
+    title: 'Nikke Library',
+    text: 'A datamine library of NIKKE: pick a section.',
+    groups: [{ cards: SECTIONS.map((s) => ({ href: s.href, title: s.title, text: s.text, n: s.id === 'stories' ? `${stories.toLocaleString('en-US')} scenes` : null })) }],
+  });
 }
 
 async function dispatch() {
@@ -262,14 +277,42 @@ async function dispatch() {
     if (enterSection('jukebox')) await Jukebox.enter();
     return Jukebox.route();
   }
-  if (enterSection('stories')) {
-    renderTabs();
-    if (!/^#\/scene\//.test(location.hash)) {
-      state.scene = null;
-      $('#reader').innerHTML = `<div class="empty"><h1>Story Reader</h1><p>Pick a chapter, event or episode from the left to start reading.</p></div>`;
-    }
+  if (enterSection('stories')) renderTabs();
+  if (!/^#\/scene\//.test(location.hash)) {
+    state.scene = null;
+    renderStoriesHub();
   }
   return route();
+}
+
+// Stories landing page, so the section works without the sidebar (phones):
+// #/stories = categories + the current category's groups, #/stories/<cat> = another
+// category's groups, #/stories/<cat>/<group> = that group's scenes.
+function renderStoriesHub() {
+  const [, catId, groupId] = location.hash.match(/^#\/stories(?:\/([^/]+))?(?:\/(.+))?/) || [];
+  const cat = state.catalogue.find((c) => c.id === catId) || state.catalogue.find((c) => c.id === state.cat) || state.catalogue[0];
+  if (cat.id !== state.cat) { state.cat = cat.id; store.set('cat', state.cat); renderTabs(); renderTree(); }
+  const count = (c) => c.groups.reduce((n, g) => n + g.scenes.length, 0);
+  const group = groupId && cat.groups.find((g) => g.id === decodeURIComponent(groupId));
+  if (group) {
+    $('#reader').innerHTML = hubHtml({
+      title: group.label,
+      text: `${cat.label} · ${group.scenes.length} scene${group.scenes.length === 1 ? '' : 's'}`,
+      groups: [
+        { cards: group.scenes.map((sc) => ({ href: `#/scene/${encodeURIComponent(sc.id)}`, title: sc.label, text: sc.stage || '', n: `${sc.lines} lines` })) },
+        { cards: [{ href: `#/stories/${cat.id}`, title: `← All of ${cat.label}` }] },
+      ],
+    });
+    return;
+  }
+  // Categories as compact chips under the intro (six cards would push the chapters off a phone screen).
+  const chips = `<div class="cat-tabs hub-cats">${state.catalogue.map((c) => `<a class="cat-tab ${c.id === cat.id ? 'active' : ''}" href="#/stories/${c.id}">
+    ${esc(c.label)}<span class="n">${count(c).toLocaleString('en-US')}</span></a>`).join('')}</div>`;
+  $('#reader').innerHTML = hubHtml({
+    title: 'Stories',
+    text: 'Pick a category, then a chapter or event. In a scene, Game view plays it line by line.',
+    groups: [{ title: cat.label, cards: cat.groups.map((g) => ({ href: `#/stories/${cat.id}/${encodeURIComponent(g.id)}`, title: g.label, n: `${g.scenes.length} scenes` })) }],
+  }).replace('</p>', `</p>${chips}`);
 }
 
 function renderTabs() {
