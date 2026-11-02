@@ -160,6 +160,7 @@ async function init() {
     else if (section === 'minigames') { Minigames.renderTree(); Minigames.rerender(); }
     else if (section === 'progression') Progression.renderTree();
     else if (section === 'monsters') { Monsters.renderTree(); Monsters.route(); }
+    else if (section === 'maps') { Maps.renderTree(); if (!/^#\/map\//.test(location.hash)) Maps.route(); }
     else if (section === 'jukebox') { Jukebox.renderTree(); Jukebox.rerender(); }
     else renderTree();
   });
@@ -192,6 +193,7 @@ function enterSection(name) {
     characters: 'Filter name, class, weapon, element…',
     minigames: 'Filter songs, artists or albums…',
     monsters: 'Filter name, code, element, grade…',
+    maps: 'Filter maps or chapters…',
   }[name] || 'Filter groups or scenes…';
   return true;
 }
@@ -203,6 +205,7 @@ const SECTIONS = [
   { id: 'stages', href: '#/stages', title: 'Stages', text: 'Campaign chapters and towers: enemies, waves, rewards.' },
   { id: 'raids', href: '#/raids', title: 'Raids', text: 'Union Raid, Solo Raid, Interception and Museum bosses.' },
   { id: 'monsters', href: '#/monsters', title: 'Monsters', text: 'Every Rapture: art, element, grade and where it appears.' },
+  { id: 'maps', href: '#/maps', title: 'Maps', text: 'Campaign fields in 3D with every stage, relic, switch and teleport.' },
   { id: 'characters', href: '#/characters', title: 'Characters', text: 'Nikke profiles, costumes and the CP calculator.' },
   { id: 'minigames', href: '#/minigame/tts', title: 'Minigames', text: 'Tracing the Stars, VOLT TRIP, Fading Affection and every event minigame.' },
   { id: 'progression', href: '#/progression/outpost', title: 'Progression', text: 'Outpost, simulation room and level costs.' },
@@ -250,6 +253,10 @@ async function dispatch() {
   if (/^#\/monster/.test(location.hash)) {
     if (enterSection('monsters')) await Monsters.enter();
     return Monsters.route();
+  }
+  if (/^#\/maps?(\/|$)/.test(location.hash)) {
+    if (enterSection('maps')) await Maps.enter();
+    return Maps.route();
   }
   if (/^#\/jukebox/.test(location.hash)) {
     if (enterSection('jukebox')) await Jukebox.enter();

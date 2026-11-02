@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nikke Library</title>
   <link rel="stylesheet" href="style.css">
+  <!-- three.js for the map viewer (public/maps.js imports it only when a map opens) -->
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
 </head>
 <body>
   <header class="topbar">
@@ -18,6 +20,7 @@
       <a class="nav-item" data-section="jukebox" href="#/jukebox">Jukebox</a>
       <a class="nav-item" data-section="characters" href="#/characters">Characters</a>
       <a class="nav-item" data-section="monsters" href="#/monsters">Monsters</a>
+      <a class="nav-item" data-section="maps" href="#/maps">Maps</a>
     </nav>
     <span id="locale-status" class="pill"></span>
   </header>
@@ -49,5 +52,6 @@
   <script src="minigames-extra.js"></script>
   <script src="progression.js"></script>
   <script src="monsters.js"></script>
+  <script src="maps.js"></script>
 </body>
 </html>

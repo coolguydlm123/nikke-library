@@ -681,3 +681,39 @@ body.at-home .sidebar { display: none; }
 .prog-nowrap td { white-space: nowrap; }
 .prog-nowrap .toggle { color: var(--text); }
 @media (max-width: 700px) { .outpost-all { max-height: 50vh; } }
+
+/* Maps (public/maps.js): the 3D field with HTML labels on top, tables below. */
+.map-body { max-width: 1200px; }
+.map-card { padding: 0; overflow: hidden; }
+.map-view { position: relative; height: min(68vh, 680px); background: #1a1e27; touch-action: none; }
+.map-view canvas { display: block; width: 100%; height: 100%; }
+.map-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.map-status { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; pointer-events: none; }
+.map-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+.map-tools .nav-btn { background: rgba(22, 25, 33, .85); }
+.map-tip { position: absolute; z-index: 3; pointer-events: none; display: grid; gap: 2px; max-width: 260px; padding: 6px 9px;
+  background: rgba(22, 25, 33, .95); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; white-space: nowrap; }
+.map-tip span { color: var(--muted); white-space: normal; }
+.map-tip .elem { display: inline-block; vertical-align: middle; }
+.mk { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; font: 600 11px/1 var(--mono, monospace);
+  padding: 3px 5px; min-width: 20px; border-radius: 10px; border: 1px solid rgba(0, 0, 0, .5); color: #111; white-space: nowrap; }
+.mk.sel { outline: 2px solid #fff; z-index: 2; transform-origin: center; }
+.mk-stage { background: #f0a83a; }
+.mk-relic { background: #5fd38a; border-radius: 3px; }
+.mk-switch, .mk-gate { background: #4aa8ff; }
+.mk-gate { border-radius: 3px; }
+.mk-teleport { background: #c77dff; }
+.mk-start { background: #fff; }
+.mk-backdrop { background: var(--dim); }
+.mk-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+.map-layers { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+.map-layers input { margin: 0; }
+.map-info { padding: 10px 16px 12px; border-top: 1px solid var(--border); font-size: 13.5px; min-height: 44px; }
+.map-info .facts { margin: 6px 0; }
+.map-row { cursor: pointer; }
+.roster tbody tr.map-row.active td { background: var(--accent-soft); }
+.seg-link.off { color: var(--dim); cursor: default; }
+@media (max-width: 760px) {
+  .map-view { height: 58vh; }
+  .mk { font-size: 10px; padding: 2px 4px; min-width: 16px; }
+}

@@ -10,14 +10,16 @@ const OUT = path.resolve(process.argv[2] || path.join(__dirname, 'dist'));
 const t0 = Date.now();
 const libs = loadAll(__dirname);
 const api = createApi(libs);
-const { stories, stages, bgm, raids, characters, eventGames, monsters } = libs;
+const { stories, stages, bgm, raids, characters, eventGames, monsters, maps, memorials } = libs;
 
 // Every request the front end makes.
 function* requests() {
   yield* ['/api/stories', '/api/stages', '/api/raids', '/api/jukebox', '/api/characters', '/api/cp-data', '/api/overload',
     '/api/minigames', '/api/tts', '/api/tts/missions', '/api/tts/skins', '/api/dicetrack', '/api/textadv', '/api/eventgames',
-    '/api/progression/outpost', '/api/progression/simulation', '/api/progression/levels', '/api/monsters'];
+    '/api/progression/outpost', '/api/progression/simulation', '/api/progression/levels', '/api/monsters', '/api/maps'];
+  for (const m of maps.list) yield `/api/map?id=${encodeURIComponent(m.id)}`;
   for (const id of stories.scenes.keys()) yield `/api/scene?id=${encodeURIComponent(id)}`;
+  for (const id of memorials.pages.keys()) yield `/api/scene?id=${id}`;
   for (const c of stages.catalogue.chapters) for (const list of Object.values(c.modes)) for (const s of list) yield `/api/stage?kind=campaign&id=${s.id}`;
   for (const t of stages.catalogue.towers) for (const f of t.floors) yield `/api/stage?kind=tower&id=${f.id}`;
   for (const g of stages.boxGroups.keys()) yield `/api/box?id=${g}`;

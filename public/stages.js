@@ -206,6 +206,7 @@ const Stages = (() => {
           ${st.category !== 'Tower' ? badge(esc(st.category), `cat-${st.category.toLowerCase()}`) : ''}
           ${badge(`Lv ${st.lv}`)}${badge(`CP ${fmt(st.cp)}`)}
           ${st.quickBattle ? badge('Quick battle') : ''}
+          ${st.map ? `<a class="nav-btn" href="#/map/${encodeURIComponent(st.map.id)}/s${st.id}">Map</a>` : ''}
           <span class="spacer"></span>${nav(st.prev, '← Prev')}${nav(st.next, 'Next →')}
         </div>
       </div>

@@ -6,5 +6,6 @@
   "waveSpawnDir": "D:/Nikke Datamine/nikke-downloader/wavedata-json",
   "localeDir": "D:/Nikke Datamine/nikke-downloader/json-locale",
   "language": "en",
-  "imageDir": "D:/Nikke Datamine/nikke-downloader/image"
+  "imageDir": "D:/Nikke Datamine/nikke-downloader/image",
+  "mapsDir": "D:/Nikke Datamine/nikke-downloader/maps"
 }
