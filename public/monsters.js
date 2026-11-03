@@ -3,6 +3,7 @@ const Monsters = (() => {
   const m = {
     list: null,
     generation: store.get('monGeneration', 'All'), // 'All' | 'Rapture' | 'Dark Matter' (MonsterModelTable.monster_generation)
+    scope: store.get('monScope', 'variant'), // "Appears in": 'variant' (the one picked) | 'all' (every variant of the model)
     cls: store.get('monClass', 'All'), // in-game class (Husk … Queen); a model matches if any variant has it
     current: null,
     variant: null,
@@ -161,23 +162,36 @@ const Monsters = (() => {
   }
 
   // One table per kind (campaign, towers, raids ...): group, stage (linked when the site has a page), level.
-  function appearancesCard(v) {
-    if (!v.appearances.length) return `<section class="card"><h3>Appears in</h3><p class="key">Not found in any stage, tower, raid or event wave.</p></section>`;
-    const kinds = [...new Set(v.appearances.map((g) => g.kind))];
+  // Exceed versions are told apart by name ("Exceed Peacock") or by their info text's class.
+  const isExceed = (v) => /^Exceed\b/i.test(v.name) || v.monsterClass === 'Exceed';
+
+  // One table per kind (campaign, towers, raids ...): group, stage (linked when the site has a page), level.
+  // "All variants" merges every variant of the model and adds a column for which one spawns there.
+  function appearancesCard(x, v) {
+    const all = m.scope === 'all';
+    const sources = all ? x.variants : [v];
+    const rows = sources.flatMap((src) => src.appearances.flatMap((g) => g.items.map((it) => ({ kind: g.kind, group: g.group, src, ...it }))));
+    if (all) rows.sort((p, q) => p.group.localeCompare(q.group, 'en', { numeric: true }) || p.label.localeCompare(q.label, 'en', { numeric: true }));
+    const toggle = x.variants.length > 1 ? `<div class="seg">${[['variant', 'This variant'], ['all', 'All variants']].map(([k, t]) =>
+      `<button class="${m.scope === k ? 'active' : ''}" data-scope="${k}">${t}</button>`).join('')}</div>` : '';
+    const head = `<h3 class="mon-appears-head">Appears in <span class="sub">${fmtNum(rows.length)}</span>${toggle}</h3>`;
+    if (!rows.length) return `<section class="card">${head}<p class="key">${all ? 'No variant of this monster' : 'This variant'} was found in any stage, tower, raid or event wave.</p></section>`;
+    const kinds = [...new Set(rows.map((r) => r.kind))].sort((p, q) => Object.keys(KIND_LABEL).indexOf(p) - Object.keys(KIND_LABEL).indexOf(q));
     const heads = { campaign: ['Chapter', 'Stage'], tower: ['Tower', 'Floors'] };
-    return `<section class="card"><h3>Appears in <span class="sub">${fmtNum(v.appearances.reduce((n, g) => n + g.count, 0))}</span></h3>
+    const variantCell = (src) => `<td>${src.elements[0] ? elemDot(src.elements[0]) : ''} <a href="${href(x.id, src.id)}">${esc(src.name)}</a>${isExceed(src) ? ' <span class="tag diff-trial">EXCEED</span>' : ''}</td>`;
+    return `<section class="card">${head}
       ${kinds.map((k) => {
-        const rows = v.appearances.filter((g) => g.kind === k).flatMap((g) => g.items.map((it) => ({ group: g.group, ...it })));
+        const list = rows.filter((r) => r.kind === k);
         const [h1, h2] = heads[k] || ['Where', 'Stage'];
-        return `<details class="mon-where" ${rows.length <= 40 ? 'open' : ''}><summary>${esc(KIND_LABEL[k] || k)} <span class="key">${fmtNum(rows.length)}</span></summary>
-          <div class="table-scroll"><table class="roster keep-cols sticky-first mon-table"><thead><tr><th>${h1}</th><th>${h2}</th><th class="num">Level</th></tr></thead><tbody>
-          ${rows.map((r) => `<tr><td>${esc(r.group)}</td>
+        return `<details class="mon-where" ${list.length <= 40 ? 'open' : ''}><summary>${esc(KIND_LABEL[k] || k)} <span class="key">${fmtNum(list.length)}</span></summary>
+          <div class="table-scroll"><table class="roster keep-cols sticky-first mon-table"><thead><tr><th>${h1}</th><th>${h2}</th>${all ? '<th>Variant</th>' : ''}<th class="num">Level</th></tr></thead><tbody>
+          ${list.map((r) => `<tr><td>${esc(r.group)}</td>
             <td>${r.href ? `<a href="${r.href}">${esc(r.label)}</a>` : esc(r.label)}${r.boss ? ' <span class="tag boss">BOSS</span>' : ''}</td>
-            <td class="num">${esc(r.lv)}</td></tr>`).join('')}
+            ${all ? variantCell(r.src) : ''}<td class="num">${esc(r.lv)}</td></tr>`).join('')}
           </tbody></table></div></details>`;
       }).join('')}
       <p class="key note">Level is the stage's monster level. Tower floors are grouped into ranges, with the number of floors in brackets when the monster skips some.
-        Rows without a link are modes the site has no pages for yet.</p>
+        Rows without a link are modes the site has no pages for yet.${all ? ' All variants: one row per variant per place, so a stage can be listed once for each element or Exceed version in it.' : ''}</p>
     </section>`;
   }
 
@@ -241,9 +255,12 @@ const Monsters = (() => {
           ${v.passive ? `<dt>Passive</dt><dd class="key">${v.passive}</dd>` : ''}
         </dl></section>
         ${skillsCard(x, v)}
-        ${appearancesCard(v)}
+        ${appearancesCard(x, v)}
         ${partsCard(x)}
       </div>`;
+    $('#reader').querySelectorAll('[data-scope]').forEach((b) => b.onclick = () => {
+      m.scope = b.dataset.scope; store.set('monScope', m.scope); renderMonster();
+    });
     $('#reader').querySelectorAll('.mon-variants tr[data-href]').forEach((tr) => tr.onclick = (e) => {
       if (!e.target.closest('a')) location.hash = tr.dataset.href;
     });

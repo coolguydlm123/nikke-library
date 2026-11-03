@@ -236,6 +236,9 @@ button { font: inherit; color: inherit; }
 .roster tbody tr:nth-child(even) td { background: rgba(255, 255, 255, .025); }
 .roster tbody tr:hover td { background: rgba(255, 255, 255, .05); }
 .roster th.num { text-align: right; }
+/* Links in content: readable on the dark panels (the browser default blue isn't). */
+.reader a:not([class]) { color: var(--self); text-decoration: none; }
+.reader a:not([class]):hover { text-decoration: underline; }
 /* The pinned cell must stay opaque (and outrank the row stripes and hover), and short
    name columns shouldn't break mid-word on a phone. */
 .roster.sticky-first th:first-child, .roster.sticky-first tbody tr td:first-child { position: sticky; left: 0; background: var(--panel); z-index: 1; white-space: nowrap; }
@@ -269,6 +272,7 @@ details.box > summary { cursor: pointer; color: var(--muted); }
 .wave-table tbody tr.wave-start td { border-top: 1px solid var(--border); }
 .wave-table tbody tr:hover td { background: rgba(255, 255, 255, .05); }
 .wave-art { width: 24px; height: 24px; object-fit: contain; flex: none; }
+.enemy-roster td:nth-child(n+2) { overflow-wrap: normal; white-space: nowrap; }
 .box-note { color: var(--dim); font-weight: normal; }
 .box-sub .box-note { flex: 1 1 10em; }
 .box-split { font: inherit; font-size: 11.5px; padding: 1px 8px; border-radius: 99px; border: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; }
@@ -548,6 +552,19 @@ tr.unseen td { opacity: .55; }
 .chip-sum b { color: var(--text); }
 .link-btn { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
 #char-hub-filters { margin: 18px 0 4px; }
+.sim-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.sim-lock { padding: 2px 10px; font-size: 12px; white-space: nowrap; }
+.sim-lock.active { border-color: var(--accent); color: var(--accent); }
+.sim-lock.lock-custom { border-color: #f0c13a; color: #f0c13a; }
+.sim-lock:disabled { opacity: .35; }
+.sim-locks { display: flex; flex-wrap: wrap; gap: 4px; }
+.voice-table td:first-child { width: 38%; color: var(--muted); }
+.voice-card select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: inherit; font-size: 13px; }
+.sim-target { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; margin-bottom: 8px; }
+.sim-cond { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ol-sim select, .ol-sim input[type=number] { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; font: inherit; font-size: 13px; }
+.ol-sim input[type=number] { width: 56px; }
+.ok-tag { color: #6fcf8a; font-size: 11px; margin-left: 6px; text-transform: none; letter-spacing: 0; }
 @media (min-width: 761px) { #char-hub-filters { display: none; } } /* the sidebar has the chips */
 @media (max-width: 760px) { .char-filters .cat-tab { padding: 5px 10px; font-size: 13px; } .char-filters { gap: 7px; } }
 .hub-head .n { color: var(--accent); font-size: 12px; letter-spacing: 0; }
@@ -659,11 +676,13 @@ tr.unseen td { opacity: .55; }
 @media (max-width: 700px) { .mon-browse { padding: 0 16px 32px; } }
 .mon-row-icon { width: 32px; height: 32px; object-fit: contain; flex: none; }
 .mon-skill-desc { margin-top: 12px; }
+.mon-appears-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mon-appears-head .seg { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
 .mon-where + .mon-where { margin-top: 6px; }
 .mon-where summary { cursor: pointer; font-size: 13.5px; padding: 4px 0; }
 .mon-table th, .mon-table td { white-space: nowrap; } /* scroll sideways on phones instead of breaking words */
 .mon-variants tr[data-href] { cursor: pointer; }
-.mon-variants .elem, .facts .elem { display: inline-block; vertical-align: middle; }
+.mon-table .elem, .facts .elem { display: inline-block; vertical-align: middle; }
 .mon-variants a { color: inherit; text-decoration: none; }
 
 /* Home */

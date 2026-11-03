@@ -107,6 +107,7 @@ const Characters = (() => {
     if (!m) { c.current = null; renderTree(); return overview(); }
     const res = await apiFetch('/api/character?code=' + m[1]);
     if (!res.ok) { $('#reader').innerHTML = '<div class="error">Character not found.</div>'; return; }
+    if (c.current?.code !== Number(m[1])) c.voiceLook = 0;
     c.current = await res.json();
     store.set('charLast', c.current.code);
     renderTree();
@@ -181,6 +182,7 @@ const Characters = (() => {
           </dl>
           <p class="key note">Modifying ${esc(o.gearRarity)} gear swaps its manufacturer effect for up to ${o.slots.length} random lines. Each line picks an effect (Roll % below), then a tier. The data has no chance per level inside a tier; hover a value for its chance per line if those levels are equally likely.</p>
         </section>
+        <section class="card ol-sim" id="ol-sim"></section>
         <section class="card"><h3>Effects by level</h3>
           <label class="toggle"><input type="checkbox" id="ol-bp" ${showBp ? 'checked' : ''}> Battle power instead of values</label>
           <div class="table-scroll"><table class="roster sticky-first keep-cols">
@@ -202,6 +204,173 @@ const Characters = (() => {
         </section>
       </div>`;
     $('#ol-bp').onchange = (e) => { c.overloadBp = e.target.checked; overloadPage(); };
+    renderSim(o);
+  }
+
+  // ---------- Overload roll simulator ----------
+  // From the data: each line's chance of getting an effect (option_slot_success_ratio), the effect
+  // weights (option_group_ratio), the tier weights (option_ratio) and the costs. Game rules from the
+  // user: an effect never repeats on one piece, the first roll after a reset (Modify gear) gives
+  // line 1 an effect at exactly Lv 11, every roll costs 1 Custom Module, and locking a line is paid
+  // once, by how many lines are already locked (0/1/2): Change Effects levels 0-2 in Custom Modules
+  // (1/2/3) or the Lock Effect rows in Custom Locks (20/30/40). Module locks stay; a Custom Lock is a
+  // temporary one-time lock, released after the next roll.
+  // Assumed: the levels inside a tier are equally likely.
+  // Short effect names for the simulator's narrow tables (full names are in the effects table).
+  const SIM_SHORT = { IncElementDmg: 'Elem Dmg', StatAccuracyCircle: 'Hit Rate', StatAmmoLoad: 'Max Ammo', StatAtk: 'ATK', StatChargeDamage: 'Charge Dmg',
+    StatChargeTime: 'Charge Spd', StatCritical: 'Crit Rate', StatCriticalDamage: 'Crit Dmg', StatDef: 'DEF' };
+  const SIM_CAP = 500000; // most rolls one "roll until" will try (about 0.3 s)
+  const SIM_SAMPLES = 40000;
+  const newSim = (o) => ({
+    lines: o.slots.map(() => null), locked: o.slots.map(() => false), rolls: 0, modules: 0, customs: 0, history: [], estimate: null, untilMsg: null,
+    target: ['IncElementDmg', 'StatAtk'].map((f) => ({ t: o.types.findIndex((t) => t.functionType === f), lv: 11 })).filter((x) => x.t >= 0),
+  });
+
+  const pickWeighted = (weights) => {
+    let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < weights.length; i++) if ((r -= weights[i]) < 0) return i;
+    return weights.length - 1;
+  };
+
+  // One roll of the unlocked lines (mutates `lines`); no effect twice on one piece. `first` = the
+  // Modify gear roll after a reset, whose line 1 is always exactly Lv 11 (the top tier's first level).
+  function rollLines(o, lines, locked, first = false) {
+    for (let i = 0; i < lines.length; i++) if (!locked[i]) lines[i] = null;
+    for (let i = 0; i < lines.length; i++) {
+      if (locked[i]) continue;
+      if (!(first && i === 0) && Math.random() * 100 >= o.slots[i]) continue;
+      const taken = new Set(lines.filter(Boolean).map((l) => l.t));
+      const t = pickWeighted(o.types.map((x, k) => (taken.has(k) ? 0 : x.chance)));
+      const tiers = o.types[t].tiers;
+      if (first && i === 0) { lines[i] = { t, lv: tiers[tiers.length - 1].levels[0].level }; continue; }
+      const tier = tiers[pickWeighted(tiers.map((x) => x.chance))];
+      lines[i] = { t, lv: tier.levels[Math.floor(Math.random() * tier.levels.length)].level };
+    }
+    return lines;
+  }
+
+  // Every target condition met by a different line.
+  function meets(lines, target) {
+    const used = new Set();
+    return target.length > 0 && target.every((g) => {
+      const i = lines.findIndex((l, k) => l && !used.has(k) && l.t === g.t && l.lv >= g.lv);
+      if (i < 0) return false;
+      used.add(i);
+      return true;
+    });
+  }
+
+  const changeCost = (o, n) => (o.costs.change.find((r) => r.level === n) || o.costs.change[o.costs.change.length - 1])?.cost[0]?.count || 0;
+  const customLockCost = (o, n) => {
+    const row = o.costs.lock.find((r) => r.level === n) || o.costs.lock[o.costs.lock.length - 1];
+    return (row?.lock.find((l) => l.level === 0) || row?.lock[0])?.cost[0]?.count || 0;
+  };
+  // What locking one more line costs now, by how many lines are already locked.
+  const lockCost = (o, sim, kind) => {
+    const n = sim.locked.filter(Boolean).length;
+    return kind === 'custom' ? { modules: 0, customs: customLockCost(o, n) } : { modules: changeCost(o, n), customs: 0 };
+  };
+  const rollCost = (o, sim) => ({ modules: sim.rolls ? changeCost(o, 0) : o.costs.modify[0]?.cost[0]?.count || 0, customs: 0 });
+  const pay = (sim, k) => { sim.modules += k.modules; sim.customs += k.customs; };
+
+  function lockLine(o, sim, i, kind) {
+    pay(sim, lockCost(o, sim, kind));
+    sim.locked[i] = kind;
+  }
+
+  // One roll; Custom Locks are released afterwards.
+  function doRoll(o, sim) {
+    pay(sim, rollCost(o, sim));
+    rollLines(o, sim.lines, sim.locked, !sim.rolls);
+    sim.locked = sim.locked.map((x) => (x === 'custom' ? false : x));
+    sim.rolls++;
+    sim.history.unshift({ n: sim.rolls, lines: sim.lines.map((l) => l && { ...l }) });
+    sim.history.length = Math.min(sim.history.length, 10);
+  }
+
+  // Chance one roll meets the target with the current locks, by sampling.
+  function estimate(o, sim) {
+    if (!sim.target.length) return null;
+    let hit = 0;
+    for (let k = 0; k < SIM_SAMPLES; k++) if (meets(rollLines(o, sim.lines.map((l) => l && { ...l }), sim.locked), sim.target)) hit++;
+    return { p: hit / SIM_SAMPLES, cost: rollCost(o, { rolls: 1 }) };
+  }
+
+  function renderSim(o) {
+    const box = $('#ol-sim');
+    if (!box) return;
+    const sim = c.sim || (c.sim = newSim(o));
+    if (!sim.estimate && sim.target.length) sim.estimate = estimate(o, sim);
+    const name = (t) => esc(SIM_SHORT[o.types[t].functionType] || o.types[t].name.replace(/^Increased /, ''));
+    const value = (l) => o.types[l.t].tiers.flatMap((x) => x.levels).find((x) => x.level === l.lv)?.value;
+    const moduleName = o.costs.modify[0]?.cost[0]?.item || 'Custom Module';
+    const lockName = o.costs.lock.flatMap((r) => r.lock)[0]?.cost[0]?.item || 'Custom Lock';
+    const next = rollCost(o, sim);
+    const costText = (k) => [k.modules || !k.customs ? `×${fmtNum(k.modules)} ${esc(moduleName)}` : '', k.customs ? `×${fmtNum(k.customs)} ${esc(lockName)}` : ''].filter(Boolean).join(' + ');
+    const lockM = lockCost(o, sim, 'module'), lockC = lockCost(o, sim, 'custom');
+    const lockCell = (l, i) => {
+      if (sim.locked[i]) return `<button class="nav-btn sim-lock active lock-${sim.locked[i]}" data-unlock="${i}" title="Unlock">${sim.locked[i] === 'custom' ? esc(lockName) : 'Locked'} ✕</button>`;
+      if (!l) return '';
+      return `<button class="nav-btn sim-lock" data-lock="${i}" data-kind="module" title="Lock with ${esc(moduleName)}s">Lock ×${lockM.modules}</button>
+        <button class="nav-btn sim-lock lock-custom" data-lock="${i}" data-kind="custom" title="One-time ${esc(lockName)}, released after the next roll">${esc(lockName)} ×${lockC.customs}</button>`;
+    };
+    const maxLv = o.types[0].tiers.reduce((n, t) => n + t.levels.length, 0);
+    const est = sim.estimate;
+    const met = meets(sim.lines, sim.target);
+    box.innerHTML = `<h3>Roll simulator</h3>
+      <div class="table-scroll"><table class="roster keep-cols">
+        <thead><tr><th>Effect</th><th class="num">Lv</th><th class="num">%</th><th>Lock</th></tr></thead>
+        <tbody>${sim.lines.map((l, i) => `<tr><td style="white-space:nowrap">${l ? name(l.t) : '—'}</td>
+          <td class="num">${l ? l.lv : '—'}</td><td class="num">${l ? value(l) : '—'}</td>
+          <td><div class="sim-locks">${lockCell(l, i)}</div></td></tr>`).join('')}
+        </tbody></table></div>
+      <div class="sim-actions">
+        <button class="nav-btn" data-roll="1">Roll</button><button class="nav-btn" data-roll="10">×10</button><button class="nav-btn" data-roll="100">×100</button>
+        <button class="nav-btn" id="sim-until" ${sim.target.length ? '' : 'disabled'}>Roll until target</button>
+        <button class="nav-btn" id="sim-reset">Reset</button>
+      </div>
+      <dl class="facts">
+        <dt>Rolls</dt><dd>${fmtNum(sim.rolls)}</dd>
+        <dt>Spent</dt><dd>${costText({ modules: sim.modules, customs: sim.customs })}</dd>
+        <dt>Next roll</dt><dd>${costText(next)}${sim.locked.includes('custom') ? ` <span class="key">· ${esc(lockName)} released after it</span>` : ''}</dd>
+        ${sim.untilMsg ? `<dt>Last run</dt><dd>${esc(sim.untilMsg)}</dd>` : ''}
+      </dl>
+      <div class="subhead">Target${met ? ' <span class="ok-tag">met</span>' : ''}</div>
+      <div class="sim-target">${sim.target.map((g, i) => `<div class="sim-cond">
+          <select data-tt="${i}">${o.types.map((t, k) => `<option value="${k}" ${k === g.t ? 'selected' : ''}>${name(k)}</option>`).join('')}</select>
+          <label class="key">Lv ≥ <input type="number" data-tl="${i}" value="${g.lv}" min="1" max="${maxLv}"></label>
+          <button class="link-btn" data-tx="${i}">remove</button></div>`).join('')}
+        ${sim.target.length < o.slots.length ? '<button class="link-btn" id="sim-add">+ add condition</button>' : ''}
+      </div>
+      ${est ? `<p class="key">Next roll with these locks: ${est.p ? `≈ ${fmtPct(est.p * 100, 3)}, about 1 in ${fmtNum(Math.round(1 / est.p))} rolls (≈ ${fmtShort(Math.round(est.cost.modules / est.p))} ${esc(moduleName)}s${est.cost.customs ? `, ${fmtShort(Math.round(est.cost.customs / est.p))} ${esc(lockName)}s` : ''})` : `not reached in ${fmtNum(SIM_SAMPLES)} sampled rolls`}.</p>` : ''}
+      ${sim.history.length ? `<div class="subhead">Last rolls</div><div class="table-scroll"><table class="roster keep-cols">
+        <thead><tr><th class="num">#</th>${o.slots.map((_, i) => `<th>Line ${i + 1}</th>`).join('')}</tr></thead>
+        <tbody>${sim.history.map((h) => `<tr><td class="num">${fmtNum(h.n)}</td>${h.lines.map((l) => `<td style="white-space:nowrap">${l ? `${name(l.t)} ${l.lv}` : '—'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : ''}
+      <p class="key note">From the data: line chances ${o.slots.map((x) => fmtPct(x)).join(' / ')}, the effect and tier weights in the tables below, and the costs. Game rules (not in the data): an effect never appears twice on one piece, and the first roll after Reset (Modify gear) gives line 1 an effect at exactly Lv ${o.types[0].tiers[o.types[0].tiers.length - 1].levels[0].level}. Assumed: the levels inside a tier are equally likely. Each roll costs ×${changeCost(o, 0)} ${esc(moduleName)}. Locking a line is paid once, by how many lines are already locked (${o.costs.lock.map((r) => r.level).join(' / ')}): ${o.costs.lock.map((r) => `×${changeCost(o, r.level)}`).join(' / ')} ${esc(moduleName)}s, or ${o.costs.lock.map((r) => `×${customLockCost(o, r.level)}`).join(' / ')} ${esc(lockName)}s. ${esc(moduleName)} locks stay; a ${esc(lockName)} is a temporary one-time lock, released after the next roll (×10, ×100 and Roll until keep it for their first roll only). The estimate samples ${fmtNum(SIM_SAMPLES)} rolls.</p>`;
+
+    const update = () => { sim.estimate = null; renderSim(o); };
+    box.querySelectorAll('[data-roll]').forEach((b) => b.onclick = () => {
+      for (let k = 0; k < Number(b.dataset.roll); k++) doRoll(o, sim);
+      sim.untilMsg = null;
+      renderSim(o);
+    });
+    box.querySelectorAll('[data-lock]').forEach((b) => b.onclick = () => { lockLine(o, sim, Number(b.dataset.lock), b.dataset.kind); update(); });
+    box.querySelectorAll('[data-unlock]').forEach((b) => b.onclick = () => { sim.locked[b.dataset.unlock] = false; update(); });
+    $('#sim-until').onclick = () => {
+      if (meets(sim.lines, sim.target)) { sim.untilMsg = 'Target already met.'; return renderSim(o); }
+      const start = sim.rolls, spent = { modules: sim.modules, customs: sim.customs };
+      while (sim.rolls - start < SIM_CAP) { doRoll(o, sim); if (meets(sim.lines, sim.target)) break; }
+      const n = sim.rolls - start;
+      sim.untilMsg = meets(sim.lines, sim.target)
+        ? `Target met after ${fmtNum(n)} roll${n === 1 ? '' : 's'} (${fmtNum(sim.modules - spent.modules)} ${moduleName}s${sim.customs - spent.customs ? `, ${fmtNum(sim.customs - spent.customs)} ${lockName}s` : ''}).`
+        : `Stopped after ${fmtNum(n)} rolls without meeting the target.`;
+      renderSim(o);
+    };
+    $('#sim-reset').onclick = () => { c.sim = { ...newSim(o), target: sim.target }; renderSim(o); };
+    box.querySelectorAll('[data-tt]').forEach((el) => el.onchange = () => { sim.target[el.dataset.tt].t = Number(el.value); update(); });
+    box.querySelectorAll('[data-tl]').forEach((el) => el.onchange = () => { sim.target[el.dataset.tl].lv = Math.max(1, Math.min(maxLv, Number(el.value) || 1)); update(); });
+    box.querySelectorAll('[data-tx]').forEach((el) => el.onclick = () => { sim.target.splice(Number(el.dataset.tx), 1); update(); });
+    $('#sim-add')?.addEventListener('click', () => { sim.target.push({ t: 0, lv: 11 }); update(); });
   }
 
   // With the favorite item toggle on, slots it replaces (1 = Skill 1, 2 = Skill 2, 3 = Burst) use its skills.
@@ -325,6 +494,28 @@ const Characters = (() => {
     ];
   }
 
+  // Voice actresses and the voice lines of the picked costume, grouped by the game's categories.
+  // A costume without its own voice group in the data shows the default lines, and says so.
+  function renderVoice(x) {
+    const box = $('#voice-card');
+    if (!box) return;
+    const v = x.voices;
+    const look = v.looks.find((k) => k.index === c.voiceLook) || v.looks[0];
+    const own = !!look.lines;
+    const lines = look.lines || v.looks[0].lines || [];
+    const cats = [...new Set(lines.map((l) => l.category))];
+    box.innerHTML = `<h3>Voice <span class="sub">${lines.length} lines</span></h3>
+      ${v.cv.length ? `<dl class="facts">${v.cv.map((k) => `<dt>${esc(k.language)}</dt><dd>${esc(k.name)}</dd>`).join('')}</dl>` : ''}
+      ${v.looks.length > 1 ? `<label class="level-pick">Costume <select id="voice-look">${v.looks.map((k) => `<option value="${k.index}" ${k === look ? 'selected' : ''}>${esc(k.name)}${k.lines ? '' : ' (default voice)'}</option>`).join('')}</select></label>` : ''}
+      ${own ? '' : `<p class="key note">No voice lines of its own for ${esc(look.name)} in the data; showing the default lines.</p>`}
+      ${cats.map((cat) => `<div class="subhead">${esc(cat)}</div>
+        <div class="table-scroll"><table class="roster keep-cols voice-table"><thead><tr><th>When</th><th>Line</th></tr></thead><tbody>
+        ${lines.filter((l) => l.category === cat).map((l) => `<tr><td>${esc(l.situation)}</td><td>${l.text ? esc(l.text) : '<span class="key">—</span>'}</td></tr>`).join('')}
+        </tbody></table></div>`).join('')}
+      <p class="key note">Text only; the voice audio isn't extracted. "Bond Lv. 10" lines unlock at that bond level.</p>`;
+    $('#voice-look')?.addEventListener('change', (e) => { c.voiceLook = Number(e.target.value); renderVoice(x); });
+  }
+
   function renderCharacter() {
     const x = c.current;
     const badge = (text, cls = '') => `<span class="badge ${cls}">${text}</span>`;
@@ -370,6 +561,7 @@ const Characters = (() => {
         <div id="skills" class="skill-stack">${skillCards(x)}</div>
         ${c.cpData ? cpCard(x) : ''}
         ${stories ? `<section class="card"><h3>Stories</h3><div class="scen-list">${stories}</div></section>` : ''}
+        ${x.voices?.looks.length ? '<section class="card voice-card" id="voice-card"></section>' : ''}
         ${x.costumes.length ? `<section class="card"><h3>Costumes <span class="sub">${x.costumes.length}</span></h3>
           <div class="rewards">${x.costumes.map((k) => `<div class="reward costume">${gameImg('icons-char', k.portrait, 'costume-img')}<span class="reward-name">${esc(k.name)}</span>
             <span class="key">${esc(k.description.split('\n').slice(1).join(' ') || k.grade)}</span></div>`).join('')}</div></section>` : ''}
@@ -381,6 +573,7 @@ const Characters = (() => {
       $('#skills').innerHTML = skillCards(x);
     };
     bindCp(x);
+    renderVoice(x);
     if (x.favorite) $('#fav-toggle').onchange = (e) => {
       c.favorite = e.target.checked; store.set('charFavorite', c.favorite);
       $('#skills').innerHTML = skillCards(x);

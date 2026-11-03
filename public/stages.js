@@ -145,12 +145,21 @@ const Stages = (() => {
   window.spawnTime = spawnTime;
   const spawnRange = (e) => (e.from == null ? '—' : e.from === e.to ? +e.from.toFixed(1) : `${+e.from.toFixed(1)}–${+e.to.toFixed(1)}`);
 
+  // Total enemies from the wave's close/mid/far counts (per cycle when waves repeat).
+  function distanceFact(b) {
+    const d = b.distance;
+    if (!d || d.close == null) return '';
+    const sum = d.close + d.mid + d.far;
+    return `<dt>Enemies</dt><dd>${fmtNum(sum)}${b.repeat ? ' per cycle' : ''} <span class="chance">· close ${fmtNum(d.close)} · mid ${fmtNum(d.mid)} · far ${fmtNum(d.far)}</span></dd>`;
+  }
+
   // Cards shared by stage, floor and raid pages.
   function fieldCard(b) {
     if (!b) return '';
     return `<section class="card"><h3>Field</h3><dl class="facts">
       <dt>Mode</dt><dd>${esc(b.mode)}</dd>
       <dt>Time limit</dt><dd>${fmtDur(b.battleTime)}</dd>
+      ${distanceFact(b)}
       <dt>Theme</dt><dd>${esc(b.theme)} · ${esc(b.themeTime)}</dd>
       <dt>Background</dt><dd class="key">${esc(b.background)}</dd>
     </dl></section>`;
@@ -160,16 +169,24 @@ const Stages = (() => {
   function battleCards(b, lv) {
     if (!b) return `<section class="card"><h3>Waves</h3><p class="key">No wave data for this stage.</p></section>`;
     const targetIds = new Set(b.targets.map((t) => t.id));
+    // Total of each enemy over all waves. Repeating waves have no total; without spawn lists
+    // the counts are enemy slots, so the total is approximate (≈).
+    const totals = new Map();
+    for (const w of b.waves) for (const e of w) totals.set(e.id, (totals.get(e.id) || 0) + e.count);
+    const total = (id) => (b.repeat || !totals.has(id) ? '—' : `${b.spawnData ? '' : '≈'}×${fmtNum(totals.get(id))}`);
+    const totalNote = b.repeat ? ' Waves repeat, so there is no total per enemy.'
+      : b.spawnData ? ' Total: how many spawn over all waves.' : ' Total: enemy slots over all waves (≈, some waves have no spawn list).';
     return `<section class="card"><h3>Enemy roster <span class="sub">${b.enemies.length}</span></h3>
-        <div class="table-scroll"><table class="roster keep-cols sticky-first"><thead><tr><th>Enemy</th><th>Grade</th><th>Element</th>
+        <div class="table-scroll"><table class="roster keep-cols sticky-first enemy-roster"><thead><tr><th>Enemy</th><th class="num">Total</th><th>Grade</th><th>Element</th>
           <th class="num">HP</th><th class="num">ATK</th><th class="num">DEF</th></tr></thead><tbody>
-        ${[...b.enemies].sort((x, y) => (y.stats?.hp ?? 0) - (x.stats?.hp ?? 0)).map((e) => `<tr class="${targetIds.has(e.id) ? 'is-target' : ''}">
-          <td><div class="roster-name">${gameImg('icons-monster', e.art, 'roster-art')}<span>${esc(e.name)}${targetIds.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</span></div></td><td><span class="grade ${gradeClass(e.grade)}">${esc(e.grade || '—')}</span></td>
+        ${[...b.enemies].sort((x, y) => targetIds.has(y.id) - targetIds.has(x.id) || (y.stats?.hp ?? 0) - (x.stats?.hp ?? 0)).map((e) => `<tr class="${targetIds.has(e.id) ? 'is-target' : ''}">
+          <td><div class="roster-name">${gameImg('icons-monster', e.art, 'roster-art')}<span>${esc(e.name)}${targetIds.has(e.id) ? ' <span class="tag target">TARGET</span>' : ''}</span></div></td>
+          <td class="num">${total(e.id)}</td><td><span class="grade ${gradeClass(e.grade)}">${esc(e.grade || '—')}</span></td>
           <td>${esc((e.element || []).join(', ') || '—')}</td>
           ${e.stats ? `<td class="num">${fmtShort(e.stats.hp)}</td><td class="num">${fmtShort(e.stats.atk)}</td><td class="num">${fmtShort(e.stats.def)}</td>`
             : '<td class="num">—</td><td class="num">—</td><td class="num">—</td>'}</tr>`).join('')}
         </tbody></table></div>
-        <p class="key note">Stats at stage level ${lv}: stat group value × monster ratio ÷ 10000. Hover a short value for the exact number.</p></section>
+        <p class="key note">Stats at stage level ${lv}: stat group value × monster ratio ÷ 10000. Hover a short value for the exact number.${totalNote}</p></section>
       <section class="card"><h3>Waves <span class="sub">${b.waves.length}</span>${b.repeat ? ' <span class="tag">REPEATS</span>' : ''}</h3>
         ${b.waves.length ? `<div class="table-scroll"><table class="roster keep-cols wave-table"><thead><tr><th class="num">Wave</th><th>Enemy</th>
           <th class="num">Count</th><th class="num">Spawn (s)</th><th class="num">Wave total</th></tr></thead><tbody>
