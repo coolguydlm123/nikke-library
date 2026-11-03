@@ -54,6 +54,9 @@ const store = {
 // lib/stages.js); it loads /api/box when opened. Equipment is grouped by tier and slot,
 // merged or split by manufacturer (one toggle for every box).
 const boxView = { cache: new Map(), split: store.get('boxSplit', false) };
+// Small item icon before a reward name (`icon` from rewardInfo / boxContents).
+// An empty slot keeps names lined up when an item has no icon (currencies).
+const rewardIcon = (r) => (r?.icon ? gameImg(r.icon.family, r.icon.name, 'reward-icon') : '<span class="reward-icon"></span>');
 const boxToggle = (r) => (r?.box ? `<details class="box" data-box="${r.box}"><summary>Contents</summary></details>` : '');
 const fmtChance = (c) => `${c >= 10 ? +c.toFixed(1) : +c.toPrecision(2)}%`;
 
@@ -67,7 +70,7 @@ function boxHtml(b) {
     for (const [corp, share] of Object.entries(e.equip.corps)) {
       corps.add(corp);
       const key = `${e.equip.tier}|${e.equip.slot}|${boxView.split ? corp : ''}`;
-      const g = gear.get(key) || { ...e.equip, corp, min: e.min, max: e.max, chance: 0, classes: new Set() };
+      const g = gear.get(key) || { ...e.equip, corp, icon: e.icon, min: e.min, max: e.max, chance: 0, classes: new Set() };
       g.chance += e.chance * share;
       g.classes.add(e.equip.cls);
       gear.set(key, g);
@@ -86,12 +89,12 @@ function boxHtml(b) {
   const corpTotal = (c) => gearList.reduce((n, g) => n + (g.corp === c ? g.chance : 0), 0);
   const gearRows = gearList.map((g, i) => (boxView.split && g.corp !== gearList[i - 1]?.corp
     ? `<tr class="box-group"><td colspan="${cols}">${esc(corpName(g.corp))}</td><td class="num">${fmtChance(corpTotal(g.corp))}</td></tr>` : '')
-    + `<tr><td>${esc(g.tier)} ${esc(g.slot)}</td><td>${g.classes.has('All') || g.classes.size === 3 ? 'Any' : esc([...g.classes].join(' / '))}</td>
+    + `<tr><td>${rewardIcon(g)}${esc(g.tier)} ${esc(g.slot)}</td><td>${g.classes.has('All') || g.classes.size === 3 ? 'Any' : esc([...g.classes].join(' / '))}</td>
         ${gearAmt ? `<td class="num">${amt(g)}</td>` : ''}<td class="num">${fmtChance(g.chance)}</td></tr>`);
   const items = b.entries.filter((e) => !e.equip);
   return `<div class="box-list">
     ${items.length ? table('<th>Item</th><th class="num">Amount</th><th class="num">Chance</th>', items.map((e) =>
-      `<tr><td>${esc(e.name)}${boxToggle(e)}</td><td class="num">${amt(e)}</td><td class="num">${fmtChance(e.chance)}</td></tr>`)) : ''}
+      `<tr><td>${rewardIcon(e)}${esc(e.name)}${boxToggle(e)}</td><td class="num">${amt(e)}</td><td class="num">${fmtChance(e.chance)}</td></tr>`)) : ''}
     ${gearList.length ? `<div class="box-sub">Equipment <span class="box-note">${[...corps].map(corpName).map(esc).join(', ')}</span>
       ${corps.size > 1 ? `<button class="box-split ${boxView.split ? 'active' : ''}">By manufacturer</button>` : ''}</div>
       ${table(`<th>Gear</th><th>Class</th>${gearAmt ? '<th class="num">Amount</th>' : ''}<th class="num">Chance</th>`, gearRows)}` : ''}
@@ -162,6 +165,7 @@ async function init() {
     else if (section === 'monsters') { Monsters.renderTree(); Monsters.route(); }
     else if (section === 'maps') { Maps.renderTree(); if (!/^#\/map\//.test(location.hash)) Maps.route(); }
     else if (section === 'jukebox') { Jukebox.renderTree(); Jukebox.rerender(); }
+    else if (section === 'misc') Misc.rerender();
     else renderTree();
   });
   // Phones: the sidebar folds into a "Browse" bar; picking something folds it again.
@@ -197,6 +201,7 @@ function enterSection(name) {
     minigames: 'Filter songs, artists or albums…',
     monsters: 'Filter name, code, element, grade…',
     maps: 'Filter maps or chapters…',
+    misc: 'Filter stories or tags…',
   }[name] || 'Filter groups or scenes…';
   return true;
 }
@@ -213,6 +218,7 @@ const SECTIONS = [
   { id: 'minigames', href: '#/minigames', title: 'Minigames', text: 'Tracing the Stars, VOLT TRIP, Fading Affection and every event minigame.' },
   { id: 'progression', href: '#/progression', title: 'Progression', text: 'Outpost, simulation room and level costs.' },
   { id: 'jukebox', href: '#/jukebox', title: 'Jukebox', text: 'Albums and tracks, and the story scenes that play them.' },
+  { id: 'misc', href: '#/misc', title: 'Misc', text: 'The Story Line timeline, and other pages that fit nowhere else.' },
 ];
 
 // A landing page of cards: the home page, and each section's own hub (README "Page patterns").
@@ -273,6 +279,10 @@ async function dispatch() {
     if (enterSection('maps')) await Maps.enter();
     return Maps.route();
   }
+  if (/^#\/misc/.test(location.hash)) {
+    if (enterSection('misc')) await Misc.enter();
+    return Misc.route();
+  }
   if (/^#\/jukebox/.test(location.hash)) {
     if (enterSection('jukebox')) await Jukebox.enter();
     return Jukebox.route();
@@ -311,7 +321,9 @@ function renderStoriesHub() {
   $('#reader').innerHTML = hubHtml({
     title: 'Stories',
     text: 'Pick a category, then a chapter or event. In a scene, Game view plays it line by line.',
-    groups: [{ title: cat.label, cards: cat.groups.map((g) => ({ href: `#/stories/${cat.id}/${encodeURIComponent(g.id)}`, title: g.label, n: `${g.scenes.length} scenes` })) }],
+    // Event groups carry their story-page background (lib/stories.js) as the card image.
+    groups: [{ title: cat.label, cards: cat.groups.map((g) => ({ href: `#/stories/${cat.id}/${encodeURIComponent(g.id)}`, title: g.label, n: `${g.scenes.length} scenes`,
+      img: g.img ? `img/${g.img}.webp` : null })) }],
   }).replace('</p>', `</p>${chips}`);
 }
 

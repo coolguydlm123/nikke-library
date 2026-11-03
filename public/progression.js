@@ -356,7 +356,7 @@ const Progression = (() => {
           <div class="table-scroll"><table class="roster keep-cols sticky-first"><thead><tr><th class="num">Level</th><th class="num">Synchro</th>${costs.map((k) => `<th class="num">${RES[k]}</th>`).join('')}</tr></thead><tbody>
           ${milestones.map((r) => `<tr><td class="num">${r.level}–${r.level + 1}</td><td class="num">${r.needSynchro}</td>
             ${costs.map((k) => `<td class="num">${fmtShort(r[k])}</td>`).join('')}</tr>`).join('')}
-          </tbody></table></div><p class="key note">Character levels where Core Dust is needed, every 10 levels. Synchro = minimum Synchro Device level needed.</p></section>
+          </tbody></table></div><p class="key note">The only character levels that cost Core Dust (Lv 10, then every 20 levels). Synchro = minimum Synchro Device level needed.</p></section>
       </div>`;
     const save = () => { store.set('progFrom', p.from); store.set('progTo', p.to); levelsPage(); };
     $('#lv-from').onchange = (e) => { p.from = Number(e.target.value) || 1; save(); };

@@ -121,17 +121,18 @@ const Stages = (() => {
       return {
         href: href('campaign', list[0].id),
         title: `Chapter ${ch.chapter}${ch.name ? ` · ${ch.name}` : ''}`,
+        img: ch.img ? `img/icons-chapter_bg/${ch.img}.webp` : null,
         text: `${Object.entries(ch.modes).map(([m, l]) => `${m} ${l.length}`).join(' · ')} · Lv ${Math.min(...all)}–${Math.max(...all)}`,
       };
     };
-    $('#reader').innerHTML = hubHtml({
+    $('#reader').innerHTML = `<div class="stages-hub">${hubHtml({
       title: 'Stages',
       text: `${fmt(stageCount)} campaign stages in ${c.chapters.length} chapters and ${c.towers.length} towers: enemies, waves and rewards.`,
       groups: [
         { title: 'Towers', cards: c.towers.map((t) => ({ href: href('tower', t.floors[0].id), title: t.name, n: `${fmt(t.floors.length)} floors`, text: towerDays(t) })) },
         { title: 'Campaign', cards: c.chapters.filter((ch) => Object.keys(ch.modes).length).map(chapterCard) },
       ],
-    });
+    })}</div>`;
   }
 
   const gradeClass = (g) => `grade-${String(g || '').toLowerCase()}`;
@@ -206,7 +207,7 @@ const Stages = (() => {
     const items = [...(r.userExp ? [{ name: 'Commander EXP', amount: r.userExp, chance: 100 }] : []), ...r.items];
     return `<section class="card"><h3>${esc(title)}</h3><div class="table-scroll"><table class="roster keep-cols">
       <thead><tr><th>Reward</th><th class="num">Amount</th><th class="num">Chance</th></tr></thead><tbody>${items.map((x) => `
-      <tr><td>${esc(x.name)}</td><td class="num">×${fmtNum(x.amount)}</td><td class="num">${fmtPct(x.chance, 2)}</td></tr>
+      <tr><td>${rewardIcon(x)}${esc(x.name)}</td><td class="num">×${fmtNum(x.amount)}</td><td class="num">${fmtPct(x.chance, 2)}</td></tr>
       ${x.box ? `<tr class="box-of"><td colspan="3">${boxToggle(x)}</td></tr>` : ''}`).join('')}
       </tbody></table></div></section>`;
   }
