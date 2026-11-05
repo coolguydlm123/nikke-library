@@ -18,9 +18,17 @@ directly from the game are marked **(inferred)**.
 
 ### Landing page (`#/stories`)
 - A hub with one chip per **category**, each with its scene count, and one card per
-  **group** (chapter, event, character …) of the chosen category. Event cards show the event's
-  story-page background: `icons-event_bg` sprite `ui_event_bg_<EventStoryTable.ui_prefab_1>`
-  (117 of 160 event groups have one; reruns and unlinked groups mostly don't).
+  **group** (chapter, event, character …) of the chosen category, with a thumbnail:
+  - **Story Line thumbnail** first (`lib/misc.js` `thumbStoryGroups`): the `HistoryManagerTable`
+    entry whose album (see `docs/misc.md`) holds most of the group's scenes gives its
+    `thumbnail_id` (`icons-storyline` / `icons-album`). "Most" matters because chapter 0's album
+    also holds the opening of chapter 1.
+  - Otherwise, for events, the event's story-page background: `icons-event_bg` sprite
+    `ui_event_bg_<EventStoryTable.ui_prefab_1>`.
+  - Memorial series use `MemorialSeriesTable.memorial_series_resource` (`icons-material`);
+    Messenger rooms their room picture (§7b).
+  - Coverage: Main 50/50, Events 117/160 (reruns and unlinked groups mostly have none),
+    Side Stories 6/7.
 - `#/stories/<category>` switches the category.
 - `#/stories/<category>/<group>` lists that group's scenes as cards: name, stage label (main
   story only, e.g. "3-1 STAGE · Start") and line count.
@@ -33,10 +41,13 @@ lists. On phones it folds into a "Browse Stories" bar.
 | Main Story | `main` | `ScenarioDialogTable/` files whose id starts `d_main_` | 771 |
 | Events | `event` | `EventScenarioDialogTable/` | 2,579 |
 | Side Stories | `side` | `SideStoryScenarioDialogTable/` | 99 |
-| Bond Episodes | `bond` | `AttractiveScenarioDialogTable/` | 1,115 |
+| Bond Episodes | `bond` | `AttractiveScenarioDialogTable/` (except `treasurestory_*`) | 991 |
 | Counseling | `counsel` | `AttractiveCounselDialogTable/` | 3,420 |
-| Sub & Sudden Stories | `sub` | the rest of `ScenarioDialogTable/` | 447 |
+| Sub & Sudden Stories | `sub` | the rest of `ScenarioDialogTable/` | 145 |
+| Favorite Items | `favorite` | `AttractiveScenarioDialogTable/treasurestory_*`: favorite item (treasure) stories, a separate thing from bond episodes | 124 |
+| Outpost | `outpost` | `ScenarioDialogTable/` scenes listed in `OutpostConditionTriggerTable` (`d_ex_*`) | 302 |
 | Memorials | `memorial` | `MemorialMemoryTable` (not a dialog table; see §7) | 272 |
+| Messenger | `messenger` | `MessengerDialogTable` (the in-game chat app; see §7b) | 1,264 |
 
 \*Counts from the data dump at the time of writing. The whole dialog set is 478,633 lines.
 
@@ -212,6 +223,47 @@ reader shows them as one more category (`lib/memorials.js`).
 
 ---
 
+## 7b. Messenger
+
+The in-game chat app (`lib/messenger.js`). A **room** is a group and each **conversation** in it
+a scene with id `msg_<conversation_id>`, drawn as chat bubbles: their lines on the left with
+the member's name and icon, the player's on the right.
+
+- **Rooms:** `MessengerRoomTable`: `id`, `type` (Nikke / Group / Quest / None, shown as "Chat"),
+  `name_locale`, `thumbnail_image`, `members`. Rooms whose id contains `test` are skipped
+  (placeholder dialog). 328 rooms have dialog with text.
+- **Members:** `MessengerMemberTable`: `name_locale`, `status_message_locale`, `profile_image`.
+- **Lines:** `MessengerDialogTable` (48,776 rows), grouped by `conversation_id` in table order,
+  each row with `room_id`:
+  - `dialog_localkey` already includes its table (`Locale_SuddenMessage:m_ex_…`); 48,530 rows
+    have text.
+  - `speaker_type` `They` is a member's line (name from `member_id`), `Self` the player,
+    `Notification` a system line.
+  - `message_type` `Choice` lines are the player's options: consecutive ones form one block and
+    each option's `jump_target` is where the chat continues, so the reader's play flow (§3)
+    works unchanged. `Monologue` is shown as a thought. `Reward` shows the reward's items from
+    `reward_id` (RewardTable). `Image` shows its `resource_id` as text.
+  - A conversation is named after its `is_opener` line (or its first line).
+- **Pictures:**
+  - Room thumbnails (`thumbnail_image`, `mi_cNNN_XX_s`) are in `icons-char-mi`.
+  - Member `profile_image` values (`si_c…`) are in `icons-char`.
+  - `icon_messenger_logo` / `icon_messenger_logo_profile` (95 members, and the group and quest
+    rooms) are client UI images that aren't in any CDN bundle, so those show no picture.
+  - 168 of 328 rooms have one.
+- **Unlock notes:** for event chats, `ArchiveMessengerConditionTable.tid` is the conversation
+  and `archive_messenger_condition_list` holds up to 3 conditions. They're shown as a first
+  line "Unlocks: …":
+  - `MessageClear` points at another row of the same table, whose `tid` is the earlier chat.
+  - `EventStageClear` / `CampaignClear` give a stage id, named from `CampaignStageTable` when
+    found.
+  - Main chats' `MessengerConditionTriggerTable` rows (triggers such as ObtainCharacter,
+    MainQuestClear, MessageClear) have no field linking them to a conversation, so they aren't
+    shown.
+- **Static build:** about 8.0 MB for the 1,264 conversation files, plus about 115 KB in the
+  story catalogue.
+
+---
+
 ## 8. Characters on stage, positions and camera (in the data, not shown)
 
 The reader doesn't show characters standing on stage. A version that did was built and then
@@ -255,6 +307,9 @@ removed at the user's request. The data is still in every line, and this is what
 | Side | Number in the id (`s3_*` → 3) → `SideStoryTable.sidestory_name`. | as above |
 | Bond / Counseling | Character, via `AttractiveCounselTable` / `AttractiveLevelRewardTable` / `LiberateAttractiveEpisodeTable` `name_code` → `Character/CharacterTable.name_localkey`. Scenes with no table link (treasure stories, some costumes) are matched by name from the id (`treasurestory_julia_02` → Julia) **(inferred match)**. | Counseling: `AttractiveCounselTable.counsel_name_localkey`. |
 | Sub & Sudden | The id with trailing numbers removed, title-cased. | `<scene id>_title` |
+| Outpost (`d_ex_*`, 302) | Its own category, one group per outpost building, in building-id order, with the building's picture (`AlbumInfoTable` row whose `sub_category_id` is the building id → `sub_category_thumbnail`, `img_album_structure_*` in `icons-album`; all 27 present): `OutpostConditionTriggerTable` has one row per story (`enter_scenario_id` / `exit_scenario_id`), and its `tid` is an `OutpostBuildingTable` id named by locale `Locale_Outpost:1000_<tid>_name` ("Cafe Lv. 1"; the "Lv. N" is dropped). 27 buildings. | `name_localkey` (`Locale_SuddenStory:<id>_title`). |
+| Favorite Items | One group per Nikke. `FavoriteItemQuestTable.end_scenario_id` is the story, `name_code` the Nikke (`Character/CharacterTable`); the 8 `treasurestory_*` scenes not in that table are matched by the name in the id. The group picture is the Nikke's favorite item icon (`FavoriteItemTable.icon_resource_id` by `name_code`, `si_favoriteitem_*` in `icons-favoriteitem`; all 21). `FavoriteItemTable.img_resource_id` names Spine models, which aren't used. The reader header shows the quest step's name (`name_localkey`, e.g. "Enter the Outpost"). | `<scene id>_title` |
+| Sub & Sudden: requests (`d_subquest_*`, `re_d_subquest_*`) | One group per requester, "Request · <name>" (`StoryLibrary.groupRequests`). The requester is the room of the Messenger chat with the same id (`d_subquest_1022_s` → chat `m_subquest_1022_s`, also tried without the `_s`/`_e` half): `MessengerRoomTable.name_locale`. Without a chat, it's the name in a title like "Raptilion's Request I: …". 46 requesters; only `d_subquest_1191_01_s/_e` match neither ("Unknown requester"). | `<scene id>_title` if any (Raptilion's and Roam's requests), else "Request NNNN · Start/End" from the id; reruns get "(rerun)". |
 
 **Event names.** `EventManagerTable.name_localkey` is a placeholder for most events:
 `story_event_name_001` ("No Caller ID") is reused by about 700 rows. So the reader:
@@ -275,6 +330,23 @@ natural order with `_s` (start) before `_e` (end). Groups are ordered by chapter
 number.
 
 ---
+
+**Outpost unlock notes.** The reader header and the hub's scene cards show what an outpost
+story needs, from the same row's `trigger_list` (up to 6 entries):
+- `ObtainCharacter` (`condition_id` = a character's `name_code` in `Character/CharacterTable`):
+  own that Nikke.
+- `MainQuestClear` (`condition_id` = `MainQuestTable.id`, named by `name_localkey`): clear that
+  main quest.
+- `CharacterAttractiveLevelMax` (`condition_id` = `name_code`, `condition_value` = 10): a bond
+  condition on that Nikke, shown raw because what the 10 means is unclear. It isn't the bond
+  cap: `AttractiveLevelTable` has bond levels 1–40, `AttractiveCounselTable.attractive_level_max`
+  is 40 for every Nikke, and the in-game cap is 30 per the user. Only one story uses it: "Luck Turbo Charge" (Command Center,
+  `d_ex_command_06`) needs it for both Noir and Blanc. It isn't a favorite item story; those
+  are the `treasurestory_*` scenes under Bond Episodes.
+
+The row also gives `resource_id` (the featured Nikke's `name_code`), `stamina_value` and
+`reward_id` (RewardTable). Example: "Seeing Any Souls?" needs Signal, Delta and Julia, features
+Julia, costs 1 stamina and rewards Darling for a Day ×1.
 
 ## 10. Known data quirks
 

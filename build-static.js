@@ -10,7 +10,7 @@ const OUT = path.resolve(process.argv[2] || path.join(__dirname, 'dist'));
 const t0 = Date.now();
 const libs = loadAll(__dirname);
 const api = createApi(libs);
-const { stories, stages, bgm, raids, characters, eventGames, monsters, maps, memorials } = libs;
+const { stories, stages, bgm, raids, characters, eventGames, monsters, maps, memorials, messenger } = libs;
 
 // Every request the front end makes.
 function* requests() {
@@ -20,6 +20,7 @@ function* requests() {
   for (const m of maps.list) yield `/api/map?id=${encodeURIComponent(m.id)}`;
   for (const id of stories.scenes.keys()) yield `/api/scene?id=${encodeURIComponent(id)}`;
   for (const id of memorials.pages.keys()) yield `/api/scene?id=${id}`;
+  for (const id of messenger.convs.keys()) yield `/api/scene?id=${id}`;
   for (const c of stages.catalogue.chapters) for (const list of Object.values(c.modes)) for (const s of list) yield `/api/stage?kind=campaign&id=${s.id}`;
   for (const t of stages.catalogue.towers) for (const f of t.floors) yield `/api/stage?kind=tower&id=${f.id}`;
   for (const g of stages.boxGroups.keys()) yield `/api/box?id=${g}`;
@@ -45,7 +46,12 @@ function* requests() {
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.cpSync(path.join(__dirname, 'public'), OUT, { recursive: true });
 const index = path.join(OUT, 'index.html');
-fs.writeFileSync(index, fs.readFileSync(index, 'utf8').replace('<script src="app.js">', '<script>window.STATIC_API = true;</script>\n  <script src="app.js">'));
+// Every release gets its own ?v= on scripts, styles and data requests, so browsers drop
+// the copies GitHub Pages lets them keep for 10 minutes.
+const BUILD = Date.now().toString(36);
+fs.writeFileSync(index, fs.readFileSync(index, 'utf8')
+  .replace(/(src|href)="([\w./-]+\.(?:js|css))"/g, `$1="$2?v=${BUILD}"`)
+  .replace('<script src="app.js', `<script>window.STATIC_API = true; window.BUILD = '${BUILD}';</script>\n  <script src="app.js`));
 fs.writeFileSync(path.join(OUT, '.nojekyll'), ''); // serve files as-is (no Jekyll pass)
 
 let files = 0;

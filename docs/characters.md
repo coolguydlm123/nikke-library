@@ -23,6 +23,7 @@ API routes (`lib/api.js`): `/api/characters` (list), `/api/character?code=N` (de
 ## Which characters are listed
 
 - **Source [data]:** `Character/CharacterTable.json`. Rows with `is_visible: false` are skipped.
+- **Order:** by `resource_id` (the art id, shown in image names as `c010`, `c011` …; Rapi is c010), then `name_code`, ascending, in the sidebar, the landing gallery and within each manufacturer group.
 - **One entry per character:** a character has one row per grade (limit-break level). The list keeps one entry per `name_code`, using the row with the lowest `grade_core_id`. `name_code` is the character's id in URLs; `resource_id` is the art and voice id (for example Rapi: name_code 3001, resource_id 10).
 - **Count:** 206 Nikkes at the time of writing (177 SSR, 20 SR, 9 R).
 - **No character stats:** base stats (ATK, HP, DEF by level) are deliberately not shown. The site owner decided against it for now.
@@ -39,14 +40,15 @@ API routes (`lib/api.js`): `/api/characters` (list), `/api/character?code=N` (de
 | Element | `element_id[]` → `ElementTable.json` `element_name_localekey` |
 | Weapon | `shot_id` → `Character/CharacterShotTable.json` `weapon_type` (AR, SMG, SG, SR, RL, MG) |
 | Burst | `use_burst_skill`: Step1/Step2/Step3/AllStep shown as I / II / III / A. "A" is the flexible burst a Nikke can use at any step; one Nikke has it. |
+| Skill effect tags | union of the tags of the Nikke's 3 skills (see "Skill effect tags") |
 | ★ (favorite item) | the Nikke has a row in `FavoriteItemTable.json` with `favorite_type: 'Favorite'` and its `name_code` |
 | Icon | image `si_c<resource_id 3 digits>_00_s` in `public/img/icons-char/` |
 
 ## Filters
 
-In the sidebar and, on phones, also on the landing page.
+On the landing page, between the tool cards and the gallery. The sidebar only shows "N of 206 match · Clear all · Edit filters" while a filter or the text box is active; its list always follows the filters.
 
-- **Chip groups:** Rarity (SSR, SR, R), Weapon (AR, SMG, SG, SR, RL, MG), Element (Fire, Water, Wind, Electric, Iron), Burst (I, II, III, Any).
+- **Chip groups:** Rarity (SSR, SR, R), Weapon (AR, SMG, SG, SR, RL, MG), Element (Fire, Water, Wind, Electric, Iron), Burst (I, II, III, Any), and Skill effect (every tag below, most common first; folded away until opened or while something in it is picked). A Nikke matches a Skill effect chip if any of its three base skills has that tag.
 - **How they combine:**
   - Picking several chips in one group matches any of them (OR).
   - Groups combine with each other (AND).
@@ -92,7 +94,26 @@ The weapon description text has placeholders such as `{damage}` that are filled 
 - **Descriptions:** `description_localkey` text has `{description_value_NN}` placeholders, filled from that level's `description_value_list`.
 - **Burst cooldown:** `Character/CharacterSkillTable.json` `skill_cooltime` ÷100 → seconds.
 - **Skill level slider:** 1–10, saved in the browser.
+- **Skill effect tags:** small badges under each skill. Favorite item versions of a skill get their own tags.
 - **Favorite item toggle** (only for Nikkes with one): `FavoriteItemTable.json` `favoriteitem_skill_group_data`. Each entry has `skill_change_slot` (1 = Skill 1, 2 = Skill 2, 3 = Burst) and `favorite_skill_id`. With the toggle on, those slots show the favorite item's versions of the skills. 21 Nikkes have one.
+
+### Skill effect tags
+
+Computed in `lib/characters.js` (`EFFECT_LABELS`, `skillTags`), level 1 of each skill, **[code]** mapping on **[data]** types:
+
+1. A skill id points either to a `StateEffectTable` row (`skill1_table` / `skill2_table` = `StateEffect`: its `functions[]`, `use_function_id_list`, `hurt_function_id_list`) or to a `Character/CharacterSkillTable` row (the burst, and some skills: its `before_*` / `after_*` `function_id_list` fields).
+2. Each function id is a `FunctionTable` row; its `function_type` is the effect. The walk follows `connected_function[]`, and `UseCharacterSkillId` (its `function_value` is another `CharacterSkillTable` id).
+3. `function_type` → short label. Near-duplicates share one: for example `Damage`, `PartsDamage`, `DurationDamage`, `ProjectileDamage` … → **Damage**; `StatAmmo`, `GainAmmo`, `AllAmmo` … → **Ammo**; `HealCharacter`, `StatHpHeal`, `HealVariation` … → **Heal**; `AddDamage`, `ShareDamageIncrease`, `DefIgnoreDamageRatio` … → **Damage Up**.
+4. A stat type whose function has `buff` = DeBuff/DebuffEtc (against enemies) becomes "<stat> Down" (ATK Down, DEF Down, Charge Speed Down …). A debuff `AddDamage` is shown as "Damage Taken Up" **[inferred]**. Other enemy-targeted types keep their label (Taunt, Stun, Damage …); debuffs of heal/ammo/cooldown/burst gauge/cover/barrier give no tag.
+5. A `CharacterSkillTable` row's own `skill_type` adds a tag when it deals damage (`Instant*`, `LaunchWeapon`, `LaserBeam`, `AutoFireWeapon` → Damage), places something (`InstallBarrier` → Barrier, `InstallDecoy` → Decoy) or `ChangeWeapon` → Weapon Change.
+
+Labels: Damage, Damage Up, ATK, DEF, Max HP, Crit Rate, Crit Damage, Hit Rate, Charge Damage, Charge Speed, Reload Speed, Fire Rate, Ammo, Pierce, Elemental Dmg, Pellets, Range, Explosion Range, Heal, Lifesteal, Cover Recovery, Barrier, Damage Reduction, Invincible, Damage Share, Taunt, Burst Gauge, Burst Duration, Cooldown, Stun, Cleanse, Debuff Immunity, Revive, Stealth, Transform, Forced Reload, Decoy, Weapon Change, plus the "Down" and "Damage Taken Up" variants.
+
+**Uncertain or not mapped:**
+- Labels are my reading of the type names: `DrainHpBuff` → Lifesteal, `StatExplosion` → Explosion Range, `Attention` and `FocusAttack` → Taunt, `Immortal` and `ImmuneDamage` → Invincible are guesses.
+- Plumbing types give no tag: `UseCharacterSkillId` (followed instead), `RemoveFunctionGroup`, `FunctionOverlapChange`, `TargetGroupid`, `TimingTriggerValueChange`, `AddFunctionTimer`, `CycleUse`, `None`. A rarer type not in the table (about 60 single-use types) also gives no tag.
+- Tags come from the function types only: the data doesn't say whether an effect applies to the user, allies or enemies beyond the `buff` field, and the tags don't distinguish them.
+- Level 1 is used; a function that only appears at a higher level isn't tagged.
 
 ### Costumes
 

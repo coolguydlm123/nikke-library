@@ -112,6 +112,9 @@ points there, and the family folder name is also the web folder name (`public/im
 | `icons-material` | `icons-material(hd)_assets_all` | `material/`, `event/`, `currency/`, `im/`, `mm/` ... (after `icn_`) | `ItemMaterialTable.resource_id`; also `MemorialSeriesTable.memorial_series_resource` (`mm_1001`) |
 | `icons-consume` | `icons-consume(hd)_assets_all` | `randombox/`, `selectbox/`, `bundlebox/` ... (after `icn_consume_`) | `ItemConsumeTable.resource_id` (13 more are in `icons-event`) |
 | `icons-equip` | `icons-equip(hd)_assets_all` | `arm/`, `body/`, `head/`, `leg/`, `ie/` (after `icn_equipment_`) | `ItemEquipTable.resource_id` |
+| `icons-char-mi` | `icons-char-mi(hd)_assets_mi_cNNN_XX_s`, one per icon; **only the ones a table names are kept** | `mi/` | `MessengerRoomTable.thumbnail_image` (`mi_c010_00_s`) |
+| `icons-sns_bg` | `icons-sns_bg(hd)_assets_all` | `sns/` | `MessengerMemberTable.background_image` (`sns_bg_default`) |
+| `icons-favoriteitem` | `icons-favoriteitem(hd)_assets_all` | `si/`, `mi/`, `favoriteitem/` | `FavoriteItemTable.icon_resource_id` / `prop_resource_id`, `FavoriteItemQuestTable.quest_thumbnail_resource_id` |
 
 `sort_images.py` only moves loose files (or icons-event's `*.bundle_export` folders). Files already
 in a subfolder are left alone. A file whose name already exists at the destination replaces it,
@@ -249,7 +252,12 @@ and whether to delete the bundles. The family list in that prompt is
 
 ## Known quirks
 
-- **`icons-char-mi` (medium character icons) isn't tracked.** Only `full` and `si` are downloaded.
+- **Only referenced icons are kept for one-bundle-per-icon families** (user, 2026-11-05: save space). `update_check.py`'s
+  `REFERENCED_ONLY` (now `icons-char-mi`) only fetches icons whose name appears in a table; 422 unused `mi_` icons were deleted and
+  their manifest entries are marked `"pruned": true`, so they aren't fetched again.
+- **Never download Spine** of any kind (`spine*` bundle groups), even when a table points at one: `FavoriteItemTable.img_resource_id`
+  (`favoriteitem_c072_00`) is a Spine model (`spinefavoriteitemgroup` / `spinecollectionitemgroup`), so it has no image.
+- `icon_messenger_logo` / `icon_messenger_logo_profile` (Messenger) aren't in any dp bundle; they're built into the client.
 - **`icons-album(hd)` isn't the Jukebox.** Despite the name, it holds story chapter album art
   (`img_album_chapterNN`, used by the Story Line); the Jukebox covers come from `icons-jukebox_album`.
 - No dp bundle holds the names in `EventManagerTable.event_banner_resource_id` / `event_thumbnail_resource_id` (`EVENT_BANNER_*`),

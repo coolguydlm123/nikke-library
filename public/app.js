@@ -11,7 +11,7 @@ function staticApiPath(url) {
   const base = u.pathname.replace(/^\/+/, '');
   return keys.length ? `${base}/${keys.map((k) => `${k}.${enc(u.searchParams.get(k))}`).join('__')}.json` : `${base}.json`;
 }
-const apiFetch = (url) => fetch(window.STATIC_API ? staticApiPath(url) : url);
+const apiFetch = (url) => fetch(window.STATIC_API ? `${staticApiPath(url)}?v=${window.BUILD || ''}` : url);
 
 // Extracted game art (web copies from tools/web-images.py, names lowercased). An image
 // that wasn't extracted removes itself instead of showing as broken.
@@ -309,7 +309,7 @@ function renderStoriesHub() {
       title: group.label,
       text: `${cat.label} · ${group.scenes.length} scene${group.scenes.length === 1 ? '' : 's'}`,
       groups: [
-        { cards: group.scenes.map((sc) => ({ href: `#/scene/${encodeURIComponent(sc.id)}`, title: sc.label, text: sc.stage || '', n: `${sc.lines} lines` })) },
+        { cards: group.scenes.map((sc) => ({ href: `#/scene/${encodeURIComponent(sc.id)}`, title: sc.label, text: sc.stage || sc.needs || '', n: `${sc.lines} lines` })) },
         { cards: [{ href: `#/stories/${cat.id}`, title: `← All of ${cat.label}` }] },
       ],
     });
@@ -475,6 +475,7 @@ function renderScene() {
     <div class="scene-head">
       <div class="crumb">${esc(state.catalogue.find((c) => c.id === s.cat).label)} · ${esc(s.group.label)}${s.stage ? ` · ${esc(s.stage)}` : ''}</div>
       <div class="scene-title">${esc(s.label)}</div>
+      ${(s.notes || []).map((n) => `<p class="scene-note">${esc(n)}</p>`).join('')}
       <div class="toolbar">
         <label class="toggle"><input type="checkbox" id="t-game" ${state.gameView ? 'checked' : ''}> Game view</label>
         <div class="seg" id="mode" ${state.gameView ? 'hidden' : ''}>
@@ -490,7 +491,7 @@ function renderScene() {
         ${navBtn(s.prev, '← Prev')}${navBtn(s.next, 'Next →')}
       </div>
     </div>
-    ${state.gameView ? '<div id="game"></div>' : `<div class="script">
+    ${state.gameView ? '<div id="game"></div>' : `<div class="script${s.chat ? ' chat' : ''}">
       ${items.map((it) => (it.choice ? choiceHtml(it) : lineHtml(it.line, it.raw))).join('')}
       <div class="end-mark">— END —</div>
       <div class="end-nav">${navBtn(s.prev, '← Previous scene')}${navBtn(s.next, 'Next scene →')}</div>

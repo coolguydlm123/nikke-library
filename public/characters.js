@@ -30,11 +30,18 @@ const Characters = (() => {
   // Filter chips: several values within a group match any of them (OR), groups combine (AND),
   // together with the sidebar's text filter. Shown in the sidebar and, on phones, on the landing page.
   const FILTERS = [
-    { key: 'rarity', label: 'Rarity', values: ['SSR', 'SR', 'R'], of: (x) => [x.rarity] },
-    { key: 'weapon', label: 'Weapon', values: ['AR', 'SMG', 'SG', 'SR', 'RL', 'MG'], of: (x) => [x.weapon] },
-    { key: 'element', label: 'Element', values: ['Fire', 'Water', 'Wind', 'Electric', 'Iron'], of: (x) => x.element },
-    { key: 'burst', label: 'Burst', values: ['I', 'II', 'III', 'A'], names: { A: 'Any' }, of: (x) => [x.burst] },
+    { key: 'rarity', label: 'Rarity', values: () => ['SSR', 'SR', 'R'], of: (x) => [x.rarity] },
+    { key: 'weapon', label: 'Weapon', values: () => ['AR', 'SMG', 'SG', 'SR', 'RL', 'MG'], of: (x) => [x.weapon] },
+    { key: 'element', label: 'Element', values: () => ['Fire', 'Water', 'Wind', 'Electric', 'Iron'], of: (x) => x.element },
+    { key: 'burst', label: 'Burst', values: () => ['I', 'II', 'III', 'A'], names: { A: 'Any' }, of: (x) => [x.burst] },
+    { key: 'effect', label: 'Skill effect', values: () => effectValues(), of: (x) => x.effects, fold: true },
   ];
+  // Skill effect: every tag any of the Nikke's skills has (lib/characters.js EFFECT_LABELS), most common first.
+  const effectValues = () => {
+    const n = new Map();
+    c.list.forEach((x) => x.effects.forEach((e) => n.set(e, (n.get(e) || 0) + 1)));
+    return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([e]) => e);
+  };
   const picked = (key) => c.sel[key] || [];
   const textMatch = (x) => {
     const f = state.filter;
@@ -46,18 +53,24 @@ const Characters = (() => {
   const anyPicked = () => FILTERS.some((g) => picked(g.key).length);
 
   function filtersHtml() {
+    const chips = (g, base) => g.values().map((v) => {
+      const on = picked(g.key).includes(v);
+      const n = base.filter((x) => g.of(x).includes(v)).length;
+      return `<button class="cat-tab ${on ? 'active' : ''}" data-g="${g.key}" data-v="${esc(v)}" aria-pressed="${on}">${esc(g.names?.[v] || v)}<span class="n">${n}</span></button>`;
+    }).join('');
     return `<div class="char-filters">${FILTERS.map((g) => {
       const base = c.list.filter((x) => passes(x, g.key));
-      return `<div class="chip-row"><span class="chip-label">${g.label}</span>${g.values.map((v) => {
-        const on = picked(g.key).includes(v);
-        const n = base.filter((x) => g.of(x).includes(v)).length;
-        return `<button class="cat-tab ${on ? 'active' : ''}" data-g="${g.key}" data-v="${esc(v)}" aria-pressed="${on}">${esc(g.names?.[v] || v)}<span class="n">${n}</span></button>`;
-      }).join('')}</div>`;
+      if (!g.fold) return `<div class="chip-row"><span class="chip-label">${g.label}</span>${chips(g, base)}</div>`;
+      // A long group folds away (open while something in it is picked).
+      const k = picked(g.key).length;
+      return `<details class="chip-fold" data-fold="${g.key}" ${k || c.open?.[g.key] ? 'open' : ''}><summary>${g.label}${k ? ` <span class="n">${k} picked</span>` : ''}</summary>
+        <div class="chip-row chip-wrap">${chips(g, base)}</div></details>`;
     }).join('')}
       <div class="chip-sum key"><b>${matches().length}</b> of ${c.list.length} match${anyPicked() || state.filter ? ' <button class="link-btn" data-clear>Clear all</button>' : ''}</div></div>`;
   }
 
   function bindFilters(root) {
+    root.querySelectorAll('[data-fold]').forEach((d) => d.addEventListener('toggle', () => { c.open = { ...c.open, [d.dataset.fold]: d.open }; }));
     root.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => {
       const list = picked(b.dataset.g);
       c.sel = { ...c.sel, [b.dataset.g]: list.includes(b.dataset.v) ? list.filter((v) => v !== b.dataset.v) : [...list, b.dataset.v] };
@@ -73,9 +86,15 @@ const Characters = (() => {
 
   const refresh = () => renderTree();
 
+  // The chips live on the landing page. The sidebar only shows a summary while a filter is active,
+  // so the list never looks filtered without a way to see why or clear it.
   function renderTabs() {
-    $('#cat-tabs').innerHTML = filtersHtml();
-    bindFilters($('#cat-tabs'));
+    const box = $('#cat-tabs');
+    const active = anyPicked() || !!state.filter;
+    box.hidden = !active;
+    box.innerHTML = active
+      ? `<div class="chip-sum key"><b>${matches().length}</b> of ${c.list.length} match <button class="link-btn" data-clear>Clear all</button> · <a href="#/characters">Edit filters</a></div>` : '';
+    bindFilters(box);
   }
 
   // Grouped by manufacturer; also redraws the chips (their counts follow the text filter)
@@ -379,11 +398,12 @@ const Characters = (() => {
     const useFavorite = x.favorite && c.favorite;
     return x.skills.map((base, i) => {
       const swap = useFavorite ? x.favorite.skills.find((f) => f.slot === i + 1) : null;
-      const s = swap ? { ...base, levels: swap.levels } : base;
+      const s = swap ? { ...base, levels: swap.levels, tags: swap.tags } : base;
       const level = s.levels[Math.min(lv, s.levels.length) - 1] || s.levels[0];
       if (!level) return '';
       return `<section class="card skill ${swap ? 'favorite-skill' : ''}"><h3>${esc(s.slot)}${swap ? ' <span class="tag fav-tag">FAVORITE ITEM</span>' : ''}${s.cooldown ? ` <span class="sub">${s.cooldown}s cooldown</span>` : ''}</h3>
         <div class="skill-name">${esc(level.name)} <span class="key">Lv ${level.level}</span></div>
+        ${s.tags?.length ? `<div class="skill-tags">${s.tags.map((t) => `<span class="badge">${esc(t)}</span>`).join('')}</div>` : ''}
         <div class="skill-desc">${richText(level.description)}</div></section>`;
     }).join('');
   }
