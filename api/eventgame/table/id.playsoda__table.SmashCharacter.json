@@ -1,0 +1,1 @@
+{"game":"Let's Play Soda","table":"EventSmashCharacterTable","name":"SmashCharacter","columns":[{"key":"id","label":"Id"},{"key":"resource","label":"Resource"},{"key":"type","label":"Type"},{"key":"type_value","label":"Type value"}],"rows":[[1,"smashsoda_milk","Target",1],[2,"smashsoda_sugar","Target",1],[3,"smashsoda_mary","Target",1],[4,"smashsoda_mustang","NoneTarget",1]]}

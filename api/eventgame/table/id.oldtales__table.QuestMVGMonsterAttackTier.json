@@ -1,0 +1,1 @@
+{"game":"In The Mirror","table":"EventQuestMVGMonsterAttackTierTable","name":"QuestMVGMonsterAttackTier","columns":[{"key":"id","label":"Id"},{"key":"tier","label":"Tier"},{"key":"energy_educted_tier","label":"Energy educted tier"}],"rows":[[1,"_0Tier",10]]}

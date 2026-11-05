@@ -1,0 +1,1 @@
+{"game":"In The Mirror","table":"EventQuestMVGChallengeLvSettingTable","name":"QuestMVGChallengeLvSetting","columns":[{"key":"id","label":"Id"},{"key":"challenge_step","label":"Challenge step"},{"key":"level_id","label":"Level id"}],"rows":[[1001000,1,1001]]}

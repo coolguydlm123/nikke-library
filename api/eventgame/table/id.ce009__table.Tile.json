@@ -1,0 +1,1 @@
+{"game":"Mini Game (CE009)","table":"EventCE009MiniGameTileTable","name":"Tile","columns":[{"key":"id","label":"Id"},{"key":"group_id","label":"Group id"},{"key":"condition_type","label":"Condition type"}],"rows":[[1,1,"Path"],[2,1,"Wall"],[3,1,"Start"]]}

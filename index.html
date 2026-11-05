@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nikke Library</title>
+  <link rel="stylesheet" href="style.css?v=mw3azv1b">
+  <!-- three.js for the map viewer (public/maps.js imports it only when a map opens) -->
+  <script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/"><span class="brand-mark">N</span> <span class="brand-name">Nikke Library</span></a>
+    <nav class="nav">
+      <a class="nav-item" data-section="stories" href="#/stories">Stories</a>
+      <a class="nav-item" data-section="stages" href="#/stages">Stages</a>
+      <a class="nav-item" data-section="raids" href="#/raids">Raids</a>
+      <a class="nav-item" data-section="minigames" href="#/minigames">Minigames</a>
+      <a class="nav-item" data-section="progression" href="#/progression">Progression</a>
+      <a class="nav-item" data-section="jukebox" href="#/jukebox">Jukebox</a>
+      <a class="nav-item" data-section="characters" href="#/characters">Characters</a>
+      <a class="nav-item" data-section="monsters" href="#/monsters">Monsters</a>
+      <a class="nav-item" data-section="maps" href="#/maps">Maps</a>
+      <a class="nav-item" data-section="misc" href="#/misc">Misc</a>
+    </nav>
+    <!-- Phones: the section menu is a dropdown (filled from SECTIONS in app.js) -->
+    <select id="nav-select" class="nav-select" aria-label="Section"></select>
+    <span id="locale-status" class="pill"></span>
+  </header>
+  <div class="notice">This project is 100% vibe coded, I gonna try to deal with future issue after trail tests later<br>
+    <b>Don't share to outside Nikke community server</b></div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <button id="browse-toggle" class="browse-toggle" type="button" aria-expanded="false">Browse <span class="chev">▾</span></button>
+      <div id="cat-tabs" class="cat-tabs"></div>
+      <input id="filter" class="filter" type="search" placeholder="Filter groups or scenes…" autocomplete="off">
+      <div id="tree" class="tree"></div>
+    </aside>
+
+    <main id="reader" class="reader">
+      <div class="empty">
+        <h1>Story Reader</h1>
+        <p>Pick a chapter, event or episode from the left to start reading.</p>
+      </div>
+    </main>
+  </div>
+
+  <script>window.STATIC_API = true; window.BUILD = 'mw3azv1b';</script>
+  <script src="app.js?v=mw3azv1b"></script>
+  <script src="stages.js?v=mw3azv1b"></script>
+  <script src="raids.js?v=mw3azv1b"></script>
+  <script src="characters.js?v=mw3azv1b"></script>
+  <script src="jukebox.js?v=mw3azv1b"></script>
+  <script src="minigames.js?v=mw3azv1b"></script>
+  <script src="minigames-extra.js?v=mw3azv1b"></script>
+  <script src="progression.js?v=mw3azv1b"></script>
+  <script src="misc.js?v=mw3azv1b"></script>
+  <script src="monsters.js?v=mw3azv1b"></script>
+  <script src="maps.js?v=mw3azv1b"></script>
+</body>
+</html>

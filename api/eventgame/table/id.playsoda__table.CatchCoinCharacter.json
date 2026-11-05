@@ -1,0 +1,1 @@
+{"game":"Let's Play Soda","table":"EventCatchCoinCharacterTable","name":"CatchCoinCharacter","columns":[{"key":"id","label":"Id"},{"key":"resource","label":"Resource"},{"key":"move_speed","label":"Move speed"},{"key":"dash_range","label":"Dash range"},{"key":"dash_speed","label":"Dash speed"}],"rows":[[1,"catchcoinsoda_soda",25000,17500,60000]]}

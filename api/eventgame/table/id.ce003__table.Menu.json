@@ -1,0 +1,1 @@
+{"game":"Serving Game (CE003)","table":"EventCE003MiniGameMenuTable","name":"Menu","columns":[{"key":"id","label":"Id"},{"key":"resource_id","label":"Resource id"},{"key":"cook_time","label":"Cook time"}],"rows":[[10,"ce003_food_01",200],[11,"ce003_food_02",200],[12,"ce003_food_03",200],[13,"ce003_food_04",200],[14,"ce003_food_05",200]]}
