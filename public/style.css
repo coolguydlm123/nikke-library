@@ -622,6 +622,9 @@ tr.unseen td { opacity: .55; }
 .v-table .v-img.large { max-width: 72px; max-height: 72px; }
 .v-table .v-row { flex-wrap: nowrap; gap: 4px 8px; }
 .mg-period { white-space: nowrap; }
+/* Fading Affection endings: the ending picture beside its title. */
+.ending-thumb { flex: none; line-height: 0; }
+.ending-img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
 /* Tracing the Stars covers: small beside a song or album name, larger on the album page. */
 .tts-cover { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; flex: none; }
 .song-table .roster-name > div { min-width: 8em; }

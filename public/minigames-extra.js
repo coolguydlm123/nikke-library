@@ -3,7 +3,7 @@
 const MinigameExtras = (() => {
   const fmt = (n) => Number(n).toLocaleString('en-US');
   const day = (iso) => (iso ? String(iso).slice(0, 10) : null);
-  const x = { dice: null, adv: null, play: null, events: null, eg: {}, egt: {} };
+  const x = { dice: null, adv: null, advs: {}, play: null, events: null, eg: {}, egt: {} };
   const rewardList = (reward) => !reward ? '<span class="key">—</span>'
     : [...(reward.userExp ? [{ name: 'Commander EXP', amount: reward.userExp }] : []), ...reward.items]
       .map((i) => `<div>${esc(i.name)} <span class="reward-amt">×${fmt(i.amount)}</span>${i.chance < 100 ? ` <span class="chance">${fmtPct(i.chance, 2)}</span>` : ''}${boxToggle(i)}</div>`).join('');
@@ -15,7 +15,7 @@ const MinigameExtras = (() => {
 
   async function load(kind) {
     if (kind === 'dicetrack' && !x.dice) x.dice = await (await apiFetch('/api/dicetrack')).json();
-    if (kind === 'textadv' && !x.adv) x.adv = await (await apiFetch('/api/textadv')).json();
+    if (kind === 'textadv' && !x.advs.textadv) x.advs.textadv = await (await apiFetch('/api/textadv')).json();
     if (!x.events) x.events = await (await apiFetch('/api/eventgames')).json();
   }
 
@@ -69,19 +69,29 @@ const MinigameExtras = (() => {
   // ---------- Fading Affection ----------
   // Endings seen and Saved Memories (loot items) carry over between runs, like in
   // the game: dying earns a memory that unlocks a safer choice next time.
-  const seenKey = 'textadvEndings';
-  const seen = () => new Set(store.get(seenKey, []));
-  const markSeen = (page) => { const s = seen(); s.add(page); store.set(seenKey, [...s]); };
-  const itemsKey = 'textadvItems';
-  const owned = () => store.get(itemsKey, []);
-  const addItem = (id) => { const s = new Set(owned()); s.add(id); store.set(itemsKey, [...s]); };
-  const setItem = (id, on) => { const s = new Set(owned()); if (on) s.add(id); else s.delete(id); store.set(itemsKey, [...s]); };
-  const setSeen = (page, on) => { const s = seen(); if (on) s.add(page); else s.delete(page); store.set(seenKey, [...s]); };
+  // Fading Affection and White Memory share this player; `cur` is the game on screen, and each keeps
+  // its own endings, memories and picked choices (the Fading Affection keys are unchanged).
+  const GAMES = {
+    textadv: { id: 'textadv', key: 'textadv', base: '#/minigame/textadv', fam: 'scenariobackground', ext: 'jpg' },
+    whitememory: { id: 'whitememory', key: 'whitememory', base: '#/minigame/whitememory/play', fam: 'icons-event', ext: 'webp' },
+  };
+  let cur = GAMES.textadv;
+  const setGame = (id) => {
+    if (cur.id !== id) reachMemo.clear();
+    cur = GAMES[id];
+    x.adv = x.advs[id];
+  };
+  const K = { get seen() { return `${cur.key}Endings`; }, get items() { return `${cur.key}Items`; }, get picked() { return `${cur.key}Picked`; }, get ignore() { return `${cur.key}IgnoreReq`; } };
+  const seen = () => new Set(store.get(K.seen, []));
+  const markSeen = (page) => { const s = seen(); s.add(page); store.set(K.seen, [...s]); };
+  const owned = () => store.get(K.items, []);
+  const addItem = (id) => { const s = new Set(owned()); s.add(id); store.set(K.items, [...s]); };
+  const setItem = (id, on) => { const s = new Set(owned()); if (on) s.add(id); else s.delete(id); store.set(K.items, [...s]); };
+  const setSeen = (page, on) => { const s = seen(); if (on) s.add(page); else s.delete(page); store.set(K.seen, [...s]); };
   // Choices picked so far: option ids, and "f<id>" for a route's starting area.
-  const pickedKey = 'textadvPicked';
-  const picked = () => new Set(store.get(pickedKey, []));
-  const markPicked = (id) => { const s = picked(); s.add(id); store.set(pickedKey, [...s]); };
-  const ENDING_LABEL = { DEATH: 'Death', EROSION: 'Corruption', TRUEENDING: 'True ending', HIDDEN: 'Hidden' };
+  const picked = () => new Set(store.get(K.picked, []));
+  const markPicked = (id) => { const s = picked(); s.add(id); store.set(K.picked, [...s]); };
+  const ENDING_LABEL = { DEATH: 'Death', EROSION: 'Corruption', TRUEENDING: 'True ending', HIDDEN: 'Hidden', NORMAL: 'Normal ending', BAD: 'Bad ending' };
 
   // Endings reachable from a page, following every choice and continue link
   // (a page that returns to the area map ends the branch). Memoised per page.
@@ -122,21 +132,21 @@ const MinigameExtras = (() => {
     const a = x.adv;
     const s = seen();
     return `<details class="group" open><summary>${esc(a.name)}</summary>
-      ${link('#/minigame/textadv/endings', 'Endings', `${a.routes.reduce((n, r) => n + r.endings.filter((e) => s.has(e.page)).length, 0)}/${a.routes.reduce((n, r) => n + r.endings.length, 0)}`, page === 'endings')}
-      ${link('#/minigame/textadv/items', 'Loot items', a.items.length, page === 'items')}
-      ${a.help?.length ? link('#/minigame/textadv/help', 'How to play', a.help.length, page === 'help') : ''}</details>
+      ${link(`${cur.base}/endings`, 'Endings', `${a.routes.reduce((n, r) => n + r.endings.filter((e) => s.has(e.page)).length, 0)}/${a.routes.reduce((n, r) => n + r.endings.length, 0)}`, page === 'endings')}
+      ${link(`${cur.base}/items`, 'Loot items', a.items.length, page === 'items')}
+      ${a.help?.length ? link(`${cur.base}/help`, 'How to play', a.help.length, page === 'help') : ''}</details>
       <details class="group" open><summary>Play a route</summary>
-      ${a.routes.map((r) => link(`#/minigame/textadv/route/${r.id}`, esc(r.name), r.unlock ? `from ${day(r.unlock.value)}` : '', page === 'route' && routeId === r.id)).join('')}
+      ${a.routes.map((r) => link(`${cur.base}/route/${r.id}`, esc(r.name), r.unlock ? `from ${day(r.unlock.value)}` : '', page === 'route' && routeId === r.id)).join('')}
       </details>`;
   }
 
   // A fresh run of a route.
   function newRun(route) {
     const st = x.adv.stats;
-    return { route: route.id, page: null, hp: st.hp.start, food: st.food.start, erosion: route.startCorruption || 0, items: owned(), log: [], notice: null, image: null };
+    return { game: cur.id, route: route.id, page: null, hp: st ? st.hp.start : 0, food: st ? st.food.start : 0, erosion: route.startCorruption || 0, items: owned(), log: [], notice: null, image: null };
   }
 
-  const ignoreReq = () => store.get('textadvIgnoreReq', false);
+  const ignoreReq = () => store.get(K.ignore, false);
   const itemName = (id) => x.adv.items.find((i) => i.id === id)?.name || `item ${id}`;
   const endingTitle = (pageId) => { const p = x.adv.pages[pageId]; return p?.ending ? `${ENDING_LABEL[p.ending.type] || p.ending.type} ${p.ending.num}: ${p.ending.title}` : `ending page ${pageId}`; };
 
@@ -163,17 +173,19 @@ const MinigameExtras = (() => {
     const route = x.adv.routes.find((r) => r.id === run.route);
     run.log.push({ page: run.page, choice: opt.text });
     markPicked(opt.id);
-    run.hp = Math.max(0, Math.min(st.hp.max, run.hp + (opt.hp || 0)));
-    run.food = Math.max(0, run.food + (opt.food || 0));
-    if (route.corruption) run.erosion = Math.max(0, Math.min(st.erosion.max, run.erosion + (opt.erosion || 0)));
+    if (st) {
+      run.hp = Math.max(0, Math.min(st.hp.max, run.hp + (opt.hp || 0)));
+      run.food = Math.max(0, run.food + (opt.food || 0));
+    }
+    if (st && route.corruption) run.erosion = Math.max(0, Math.min(st.erosion.max, run.erosion + (opt.erosion || 0)));
     let next = opt.page;
-    if (run.hp <= 0 && opt.deathPage) next = opt.deathPage;
-    else if (route.corruption && run.erosion >= st.erosion.max && opt.erosionPage) next = opt.erosionPage;
+    if (st && run.hp <= 0 && opt.deathPage) next = opt.deathPage;
+    else if (st && route.corruption && run.erosion >= st.erosion.max && opt.erosionPage) next = opt.erosionPage;
     arrive(run, next);
   }
 
   // Web copies made by tools/web-images.py; hidden when an image hasn't been extracted.
-  const sceneImg = (name, cls = 'adv-scene') => gameImg('scenariobackground', name, cls);
+  const sceneImg = (name, cls = 'adv-scene') => gameImg(cur.fam, name, cls);
   const iconImg = (name) => gameImg('icons-event', name, 'adv-icon');
 
   const delta = (n, label) => (n ? `<span class="delta ${n > 0 ? 'up' : 'down'}">${label} ${n > 0 ? '+' : ''}${n}</span>` : '');
@@ -182,13 +194,13 @@ const MinigameExtras = (() => {
     const a = x.adv;
     const route = a.routes.find((r) => r.id === routeId);
     if (!route) return '<div class="error">Route not found.</div>';
-    if (!x.play || x.play.route !== routeId) x.play = newRun(route);
+    if (!x.play || x.play.game !== cur.id || x.play.route !== routeId) x.play = newRun(route);
     const run = x.play;
     const st = a.stats;
     const ign = ignoreReq();
     const statsBar = `<div class="adv-stats">
-      <span>${esc(st.hp.name)} <b>${run.hp}/${st.hp.max}</b></span><span>${esc(st.food.name)} <b>${run.food}</b></span>
-      ${route.corruption ? `<span>${esc(st.erosion.name)} <b>${run.erosion}/${st.erosion.max}</b></span>` : ''}
+      ${st ? `<span>${esc(st.hp.name)} <b>${run.hp}/${st.hp.max}</b></span><span>${esc(st.food.name)} <b>${run.food}</b></span>
+      ${route.corruption ? `<span>${esc(st.erosion.name)} <b>${run.erosion}/${st.erosion.max}</b></span>` : ''}` : ''}
       <span>Memories <b>${run.items.length}</b></span>
       <label class="toggle"><input type="checkbox" id="adv-ign" ${ign ? 'checked' : ''}> Ignore requirements</label>
       <button class="nav-btn" id="adv-restart">Restart route</button>
@@ -225,7 +237,7 @@ const MinigameExtras = (() => {
             return `<button class="option adv-opt" data-opt="${p.options.indexOf(o)}" ${locked ? 'disabled' : ''}>
               ${esc(o.text)}${o.hidden ? ' <span class="tag">HIDDEN</span>' : ''}
               ${choiceStatus(o.id, [o.page, o.deathPage, o.erosionPage])}
-              <span class="deltas">${delta(o.hp, st.hp.name)}${delta(o.food, st.food.name)}${route.corruption ? delta(o.erosion, st.erosion.name) : ''}</span>
+              <span class="deltas">${st ? `${delta(o.hp, st.hp.name)}${delta(o.food, st.food.name)}${route.corruption ? delta(o.erosion, st.erosion.name) : ''}` : ''}</span>
               ${o.condition ? `<span class="req ${req.ok ? 'ok' : ''}">${esc(req.text || '')}${o.condition.hint && locked ? ` · ${esc(o.condition.hint)}` : ''}</span>` : ''}</button>`;
           }).join('') : ''}
           ${p.type === 'ResultPage' ? `<button class="option adv-opt" data-continue="1">Continue →</button>` : ''}
@@ -243,11 +255,11 @@ const MinigameExtras = (() => {
   function bindRoute(routeId, rerender) {
     const run = x.play;
     const a = x.adv;
-    $('#adv-ign').onchange = (e) => { store.set('textadvIgnoreReq', e.target.checked); rerender(); };
+    $('#adv-ign').onchange = (e) => { store.set(K.ignore, e.target.checked); rerender(); };
     $('#adv-restart').onclick = () => { x.play = newRun(a.routes.find((r) => r.id === routeId)); rerender(); };
     $('#adv-reset').onclick = () => {
       if (!confirm('Forget every ending cleared, memory found and choice picked?')) return;
-      store.set(seenKey, []); store.set(itemsKey, []); store.set(pickedKey, []);
+      store.set(K.seen, []); store.set(K.items, []); store.set(K.picked, []);
       x.play = newRun(a.routes.find((r) => r.id === routeId)); rerender();
     };
     $('#reader').querySelectorAll('.adv-opt').forEach((b) => b.onclick = () => {
@@ -270,6 +282,10 @@ const MinigameExtras = (() => {
     });
   }
 
+  // The ending page's picture as a thumbnail that opens the full image.
+  const endingThumb = (name) => (name
+    ? `<a class="ending-thumb" href="img/${cur.fam}/${esc(name.toLowerCase())}.${cur.ext}" target="_blank" rel="noopener">${sceneImg(name, 'ending-img')}</a>` : '');
+
   function endingsPage() {
     const a = x.adv;
     const s = seen();
@@ -279,7 +295,7 @@ const MinigameExtras = (() => {
         <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">Cleared</th><th>Ending</th><th>Hint</th></tr></thead><tbody>
         ${r.endings.map((e) => `<tr class="${s.has(e.page) ? '' : 'unseen'}">
           <td class="num"><input type="checkbox" class="ending-toggle" data-page="${e.page}" ${s.has(e.page) ? 'checked' : ''} aria-label="Cleared"></td>
-          <td><span class="tag ending-tag ending-${e.type.toLowerCase()}">${esc(ENDING_LABEL[e.type] || e.type)} ${e.num}</span> ${esc(e.title)}</td>
+          <td><div class="roster-name">${endingThumb(a.pages[e.page]?.image)}<div><span class="tag ending-tag ending-${e.type.toLowerCase()}">${esc(ENDING_LABEL[e.type] || e.type)} ${e.num}</span> ${esc(e.title)}</div></div></td>
           <td class="key">${esc(e.hint || '')}</td></tr>`).join('')}
         </tbody></table></div></section>`).join('')}</div>`;
   }
