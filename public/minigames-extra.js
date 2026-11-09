@@ -131,7 +131,7 @@ const MinigameExtras = (() => {
   function advTree(page, routeId) {
     const a = x.adv;
     const s = seen();
-    return `<details class="group" open><summary>${esc(a.name)}</summary>
+    return `<details class="group" open><summary>${esc(cur.id === 'whitememory' ? 'Play and track' : a.name)}</summary>
       ${link(`${cur.base}/endings`, 'Endings', `${a.routes.reduce((n, r) => n + r.endings.filter((e) => s.has(e.page)).length, 0)}/${a.routes.reduce((n, r) => n + r.endings.length, 0)}`, page === 'endings')}
       ${link(`${cur.base}/items`, 'Loot items', a.items.length, page === 'items')}
       ${a.help?.length ? link(`${cur.base}/help`, 'How to play', a.help.length, page === 'help') : ''}</details>
@@ -514,21 +514,37 @@ const MinigameExtras = (() => {
     };
   }
 
-  // Routing for the three games; hash is "#/minigame/<game>/...".
+  // The player's pages: play a route, endings tracker, loot items, help.
+  function advRoute(rest, rerender) {
+    if (!rest[0] && cur.id === 'whitememory') rest = ['route', x.adv.routes[0].id];
+    if (rest[0] === 'route') {
+      const id = Number(rest[1]);
+      return { tree: advTree('route', id), html: routePage(id), bind: () => bindRoute(id, rerender) };
+    }
+    if (rest[0] === 'help') return { tree: advTree('help'), html: head([x.adv.name], 'How to play', 'The in-game guide.') + helpHtml(x.adv.help || []) };
+    const page = rest[0] === 'items' ? 'items' : 'endings';
+    return { tree: advTree(page), html: page === 'items' ? itemsPage() : endingsPage(), bind: page === 'items' ? () => bindItems(rerender) : () => bindEndings(rerender) };
+  }
+
+  // Routing for the minigames; hash is "#/minigame/<game>/...".
   async function route(game, rest, rerender) {
     await load(game);
     if (game === 'dicetrack') {
       const page = rest[0] === 'missions' ? 'missions' : 'board';
       return { tree: diceTree(page), html: dicePage(page) };
     }
-    if (game === 'textadv') {
-      if (rest[0] === 'route') {
-        const id = Number(rest[1]);
-        return { tree: advTree('route', id), html: routePage(id), bind: () => bindRoute(id, rerender) };
+    if (game === 'textadv') { setGame('textadv'); return advRoute(rest, rerender); }
+    if (game === 'whitememory') {
+      // Its rules viewer plus a playable run, tracker and memories (the Fading Affection player).
+      if (!x.advs.whitememory) x.advs.whitememory = await (await apiFetch('/api/whitememory-play')).json();
+      setGame('whitememory');
+      if (rest[0] !== 'play') {
+        const view = await eventsRoute([game, ...rest], rerender);
+        return view && { ...view, tree: advTree(null) + view.tree };
       }
-      if (rest[0] === 'help') return { tree: advTree('help'), html: head([x.adv.name], 'How to play', 'The in-game guide.') + helpHtml(x.adv.help || []) };
-      const page = rest[0] === 'items' ? 'items' : 'endings';
-      return { tree: advTree(page), html: page === 'items' ? itemsPage() : endingsPage(), bind: page === 'items' ? () => bindItems(rerender) : () => bindEndings(rerender) };
+      const view = await eventsRoute([game], rerender);
+      const play = advRoute(rest.slice(1), rerender);
+      return { ...play, tree: play.tree + view.tree };
     }
     if (x.events.some((g) => g.id === game)) return eventsRoute([game, ...rest], rerender);
     return null;

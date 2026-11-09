@@ -1,4 +1,8 @@
 // Nikke Library — playable characters.
+// Extension points: an optional local script can add to these lists before the pages render (all empty
+// here): hubCards {href,title,text}, sidebarItems {href,title,note}, routes {test(hash), page()},
+// characterCards {has(x), fill(x, el)} (a card on a Nikke's page). Characters.kit is its toolbox.
+window.NL_EXT = window.NL_EXT || { hubCards: [], sidebarItems: [], routes: [], characterCards: [] };
 const Characters = (() => {
   const c = {
     list: null,
@@ -33,6 +37,7 @@ const Characters = (() => {
     { key: 'rarity', label: 'Rarity', values: () => ['SSR', 'SR', 'R'], of: (x) => [x.rarity] },
     { key: 'weapon', label: 'Weapon', values: () => ['AR', 'SMG', 'SG', 'SR', 'RL', 'MG'], of: (x) => [x.weapon] },
     { key: 'element', label: 'Element', values: () => ['Fire', 'Water', 'Wind', 'Electric', 'Iron'], of: (x) => x.element },
+    { key: 'corp', label: 'Maker', values: () => CORP_ORDER, of: (x) => [x.corporation] },
     { key: 'burst', label: 'Burst', values: () => ['I', 'II', 'III', 'A'], names: { A: 'Any' }, of: (x) => [x.burst] },
     { key: 'effect', label: 'Skill effect', values: () => effectValues(), of: (x) => x.effects, fold: true },
   ];
@@ -42,45 +47,50 @@ const Characters = (() => {
     c.list.forEach((x) => x.effects.forEach((e) => n.set(e, (n.get(e) || 0) + 1)));
     return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([e]) => e);
   };
-  const picked = (key) => c.sel[key] || [];
+  // The filter state lives in `st`: the main list uses `c`; an extension brings its own (st.sel,
+  // st.open, st.key = storage key, st.list = rows, st.groups = FILTERS plus its own groups).
+  const picked = (key, st = c) => st.sel[key] || [];
   const textMatch = (x) => {
     const f = state.filter;
     return !f || [x.name, x.class, x.weapon, x.burst && `burst ${x.burst}`, ...x.element].some((v) => v && String(v).toLowerCase().includes(f));
   };
+  const groupsOf = (st) => st.groups || FILTERS;
+  const listOf = (st) => st.list || c.list;
   // `skip` leaves one group out, for that group's chip counts.
-  const passes = (x, skip) => textMatch(x) && FILTERS.every((g) => g.key === skip || !picked(g.key).length || g.of(x).some((v) => picked(g.key).includes(v)));
-  const matches = () => c.list.filter((x) => passes(x));
-  const anyPicked = () => FILTERS.some((g) => picked(g.key).length);
+  const passes = (x, skip, st = c) => textMatch(x) && groupsOf(st).every((g) => g.key === skip || !picked(g.key, st).length || g.of(x).some((v) => picked(g.key, st).includes(v)));
+  const matches = (st = c) => listOf(st).filter((x) => passes(x, undefined, st));
+  const anyPicked = (st = c) => groupsOf(st).some((g) => picked(g.key, st).length);
 
-  function filtersHtml() {
+  function filtersHtml(st = c) {
     const chips = (g, base) => g.values().map((v) => {
-      const on = picked(g.key).includes(v);
+      const on = picked(g.key, st).includes(v);
       const n = base.filter((x) => g.of(x).includes(v)).length;
       return `<button class="cat-tab ${on ? 'active' : ''}" data-g="${g.key}" data-v="${esc(v)}" aria-pressed="${on}">${esc(g.names?.[v] || v)}<span class="n">${n}</span></button>`;
     }).join('');
-    return `<div class="char-filters">${FILTERS.map((g) => {
-      const base = c.list.filter((x) => passes(x, g.key));
+    return `<div class="char-filters">${groupsOf(st).map((g) => {
+      const base = listOf(st).filter((x) => passes(x, g.key, st));
       if (!g.fold) return `<div class="chip-row"><span class="chip-label">${g.label}</span>${chips(g, base)}</div>`;
       // A long group folds away (open while something in it is picked).
-      const k = picked(g.key).length;
-      return `<details class="chip-fold" data-fold="${g.key}" ${k || c.open?.[g.key] ? 'open' : ''}><summary>${g.label}${k ? ` <span class="n">${k} picked</span>` : ''}</summary>
+      const k = picked(g.key, st).length;
+      return `<details class="chip-fold" data-fold="${g.key}" ${k || st.open?.[g.key] ? 'open' : ''}><summary>${g.label}${k ? ` <span class="n">${k} picked</span>` : ''}</summary>
         <div class="chip-row chip-wrap">${chips(g, base)}</div></details>`;
     }).join('')}
-      <div class="chip-sum key"><b>${matches().length}</b> of ${c.list.length} match${anyPicked() || state.filter ? ' <button class="link-btn" data-clear>Clear all</button>' : ''}</div></div>`;
+      <div class="chip-sum key"><b>${matches(st).length}</b> of ${listOf(st).length} match${anyPicked(st) || state.filter ? ' <button class="link-btn" data-clear>Clear all</button>' : ''}</div></div>`;
   }
 
-  function bindFilters(root) {
-    root.querySelectorAll('[data-fold]').forEach((d) => d.addEventListener('toggle', () => { c.open = { ...c.open, [d.dataset.fold]: d.open }; }));
+  // `again` redraws whatever shows the chips after a change.
+  function bindFilters(root, st = c, again = () => refresh()) {
+    root.querySelectorAll('[data-fold]').forEach((d) => d.addEventListener('toggle', () => { st.open = { ...st.open, [d.dataset.fold]: d.open }; }));
     root.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => {
-      const list = picked(b.dataset.g);
-      c.sel = { ...c.sel, [b.dataset.g]: list.includes(b.dataset.v) ? list.filter((v) => v !== b.dataset.v) : [...list, b.dataset.v] };
-      store.set('charFilters', c.sel);
-      refresh();
+      const list = picked(b.dataset.g, st);
+      st.sel = { ...st.sel, [b.dataset.g]: list.includes(b.dataset.v) ? list.filter((v) => v !== b.dataset.v) : [...list, b.dataset.v] };
+      store.set(st.key || 'charFilters', st.sel);
+      again();
     });
     root.querySelector('[data-clear]')?.addEventListener('click', () => {
-      c.sel = {}; store.set('charFilters', c.sel);
+      st.sel = {}; store.set(st.key || 'charFilters', st.sel);
       if (state.filter) { state.filter = ''; $('#filter').value = ''; }
-      refresh();
+      again();
     });
   }
 
@@ -106,6 +116,7 @@ const Characters = (() => {
       .sort((a, b) => (CORP_ORDER.indexOf(a) + 1 || 99) - (CORP_ORDER.indexOf(b) + 1 || 99));
     const onOverload = location.hash.startsWith('#/character/overload');
     $('#tree').innerHTML = `<details class="group" open><summary>Gear</summary>
+        ${NL_EXT.sidebarItems.map((i) => `<a class="scene-link ${location.hash.startsWith(i.href) ? 'active' : ''}" href="${esc(i.href)}"><span>${esc(i.title)}</span><span class="lines">${esc(i.note || '')}</span></a>`).join('')}
         <a class="scene-link ${onOverload ? 'active' : ''}" href="#/character/overload"><span>Overload gear</span><span class="lines">effects, chances, costs</span></a>
       </details>` + (corps.map((corp) => {
       const members = list.filter((x) => x.corporation === corp);
@@ -122,6 +133,8 @@ const Characters = (() => {
 
   async function route() {
     if (location.hash.startsWith('#/character/overload')) { c.current = null; renderTree(); return overloadPage(); }
+    const extRoute = NL_EXT.routes.find((r) => r.test(location.hash));
+    if (extRoute) { c.current = null; renderTree(); return extRoute.page(); }
     const m = location.hash.match(/^#\/character\/(\d+)/);
     if (!m) { c.current = null; renderTree(); return overview(); }
     const res = await apiFetch('/api/character?code=' + m[1]);
@@ -145,6 +158,7 @@ const Characters = (() => {
       text: `${c.list.length} Nikkes: ${count('SSR')} SSR, ${count('SR')} SR, ${count('R')} R. Pick one for skills, weapon, CP and stories.`,
       groups: [{ title: 'Tools', cards: [
         { href: `${href(last.code)}/cp`, title: 'CP calculator', text: `On every Nikke's page; opens ${last.name}.` },
+        ...NL_EXT.hubCards,
         { href: '#/character/overload', title: 'Overload gear', text: 'What modified gear lines roll, the chances and the costs.' },
       ] }],
     });
@@ -555,6 +569,7 @@ const Characters = (() => {
         </div>
       </div>
       <div class="stage-body">
+        ${NL_EXT.characterCards.map((e, i) => (e.has(x) ? `<section class="card ext-card" data-ext="${i}"></section>` : '')).join('')}
         <section class="card"><h3>Profile</h3><div class="profile">
           ${gameImg('icons-char', x.portrait, 'char-portrait')}<div>
           ${x.description ? `<p class="prose">${esc(x.description)}</p>` : ''}
@@ -594,11 +609,23 @@ const Characters = (() => {
     };
     bindCp(x);
     renderVoice(x);
+    NL_EXT.characterCards.forEach((e, i) => { const el = $(`#reader .ext-card[data-ext="${i}"]`); if (el) e.fill(x, el); });
     if (x.favorite) $('#fav-toggle').onchange = (e) => {
       c.favorite = e.target.checked; store.set('charFavorite', c.favorite);
       $('#skills').innerHTML = skillCards(x);
     };
   }
 
-  return { enter, route, renderTree };
+  // The toolbox for extensions (window.NL_EXT).
+  const kit = {
+    get list() { return c.list; }, FILTERS, filtersHtml, bindFilters, matches, passes, picked, anyPicked, href, CORP_ORDER, effectValues,
+    get cpData() { return c.cpData; },
+    // Saves calculator inputs for x and redraws the calculator card.
+    applyCp: (x, v) => {
+      store.set(`cp-${x.code}`, { ...cpDefaults(), ...v });
+      const card = $('#reader .cp-card');
+      if (card) { card.outerHTML = cpCard(x); bindCp(x); }
+    },
+  };
+  return { enter, route, renderTree, kit };
 })();

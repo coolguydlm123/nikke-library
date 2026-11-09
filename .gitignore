@@ -3,3 +3,8 @@ dist/
 .pages-test/
 .pages.git/
 public/img/
+local/
+public/personal/
+lib/personal/
+tools/personal/
+docs/personal/

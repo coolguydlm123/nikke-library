@@ -213,7 +213,7 @@ const SECTIONS = [
   { id: 'stages', href: '#/stages', title: 'Stages', text: 'Campaign chapters and towers: enemies, waves, rewards.' },
   { id: 'raids', href: '#/raids', title: 'Raids', text: 'Union Raid, Solo Raid, Interception and Museum bosses.' },
   { id: 'monsters', href: '#/monsters', title: 'Monsters', text: 'Every Rapture: art, element, grade and where it appears.' },
-  { id: 'maps', href: '#/maps', title: 'Maps', text: 'Campaign fields in 3D with every stage, relic, switch and teleport.' },
+  { id: 'maps', href: '#/maps', title: 'Maps', text: 'Campaign and event fields: walkable area, 3D model, stages, NPCs, items, and an event timeline.' },
   { id: 'characters', href: '#/characters', title: 'Characters', text: 'Nikke profiles, costumes and the CP calculator.' },
   { id: 'minigames', href: '#/minigames', title: 'Minigames', text: 'Tracing the Stars, VOLT TRIP, Fading Affection and every event minigame.' },
   { id: 'progression', href: '#/progression', title: 'Progression', text: 'Outpost, simulation room and level costs.' },

@@ -18,7 +18,8 @@ const server = http.createServer((req, res) => {
     res.writeHead(out.status, { 'Content-Type': 'application/json; charset=utf-8' });
     return res.end(JSON.stringify(out.body));
   }
-  const rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname).replace(/^\/+/, '');
+  const pathname = api.alias[url.pathname] || url.pathname;
+  const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
   const file = path.normalize(path.join(PUBLIC, rel));
   if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
     res.writeHead(404); return res.end('Not found');

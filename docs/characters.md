@@ -48,7 +48,7 @@ API routes (`lib/api.js`): `/api/characters` (list), `/api/character?code=N` (de
 
 On the landing page, between the tool cards and the gallery. The sidebar only shows "N of 206 match · Clear all · Edit filters" while a filter or the text box is active; its list always follows the filters.
 
-- **Chip groups:** Rarity (SSR, SR, R), Weapon (AR, SMG, SG, SR, RL, MG), Element (Fire, Water, Wind, Electric, Iron), Burst (I, II, III, Any), and Skill effect (every tag below, most common first; folded away until opened or while something in it is picked). A Nikke matches a Skill effect chip if any of its three base skills has that tag.
+- **Chip groups:** Rarity (SSR, SR, R), Weapon (AR, SMG, SG, SR, RL, MG), Element (Fire, Water, Wind, Electric, Iron), Maker (manufacturer: Elysion, Missilis, Tetra, Pilgrim, Abnormal), Burst (I, II, III, Any), and Skill effect (every tag below, most common first; folded away until opened or while something in it is picked). A Nikke matches a Skill effect chip if any of its three base skills has that tag.
 - **How they combine:**
   - Picking several chips in one group matches any of them (OR).
   - Groups combine with each other (AND).
@@ -264,6 +264,10 @@ These are not in the data.
 - **A Custom Lock is a temporary one-time lock:** it holds for the next roll only, then the line unlocks. ×10, ×100 and Roll until don't re-apply it.
 
 **Not modeled:** the Lock Effect table's module prices (2/3/4), and `disposable_fix_cost_level` 1–2 (Custom Lock prices 50/60). The owner's rule above uses other columns of the same tables; how the game uses these isn't known. The game's "Reroll Values" action (keep effects, reroll values) has no cost group and isn't simulated.
+
+## Extension points
+
+Optional local scripts can extend the Characters pages without being part of the site. `public/characters.js` defines `window.NL_EXT` (all lists empty by default): `hubCards` (cards on the landing page), `sidebarItems` (sidebar links), `routes` (`{ test(hash), page() }`) and `characterCards` (`{ has(x), fill(x, el) }`, a card on a Nikke's page). `Characters.kit` is the toolbox: the filter bar (`filtersHtml`, `bindFilters`, `matches`), `href`, the CP calculator fill (`applyCp`), `list` and `cpData`. `lib/api.js` loads an optional local server module that can add API routes and static aliases. None of this is used by the public site.
 
 ## Known gaps
 
