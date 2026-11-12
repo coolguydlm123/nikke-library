@@ -844,3 +844,7 @@ body.at-home .sidebar { display: none; }
 .map-info .dialog h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .map-info .dl { font-size: 13px; padding: 1px 0; overflow-wrap: anywhere; }
 .map-info .dl b { color: var(--accent); font-weight: 600; margin-right: 4px; }
+.tl-notes { margin-top: 4px; font-size: 13px; }
+.tl-notes:empty { display: none; }
+.tl-note { padding: 2px 0; color: var(--text); }
+.tl-note b { color: var(--accent); font-weight: 600; margin-right: 8px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; }

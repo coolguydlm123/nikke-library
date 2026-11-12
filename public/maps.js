@@ -133,6 +133,7 @@ const Maps = (() => {
     const npcs = by('npc');
     const layers = LAYERS.filter(([k]) => k === 'backdrop' || c.markers.some((x) => layerOf(x) === k)); // only what this map has
     const tl = c.timeline;
+    const noteRows = (tl?.states || []).flatMap((st, i) => (st.notes || []).map((n) => ({ i, st, n })));
     const versions = c.versions.length > 1 ? `<div class="seg">${c.versions.map((v) => v.available
       ? `<a class="seg-link ${v.id === c.id ? 'active' : ''}" href="${href(v.id)}">${esc(v.mode)}</a>`
       : `<span class="seg-link off" title="Not exported yet">${esc(v.mode)}</span>`).join('')}</div>` : '';
@@ -147,7 +148,8 @@ const Maps = (() => {
             <i class="mk-dot mk-${k}"></i>${k === 'relic' && c.kind === 'event' ? 'Items' : label}</label>`).join('')}</span></div>
         ${tl ? `<div class="timeline-bar"><label class="toggle">Timeline
             <select id="tl-state">${tl.states.map((st, i) => `<option value="${i}">${esc(st.label)}</option>`).join('')}</select></label>
-          <span class="tl-req" id="tl-req"></span></div>` : ''}
+          <span class="tl-req" id="tl-req"></span></div>
+        <div class="tl-notes" id="tl-notes"></div>` : ''}
       </div>
       <div class="stage-body map-body">
         <section class="card map-card">
@@ -164,10 +166,16 @@ const Maps = (() => {
           <tbody>${stages.map((x) => row(x, `<td>${esc(x.label)}</td><td class="num">${fmtNum(x.lv)}</td><td class="num">${fmtShort(x.cp)}</td>
             <td>${elems(x.elements)}</td><td><a href="#/stage/campaign/${x.id}">Stage →</a></td>`)).join('')}</tbody></table></div></section>` : ''}
         ${tl ? `<section class="card"><h3>Timeline <span class="sub">${tl.states.length} states</span></h3>
-          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">#</th><th>State</th><th>Needs</th><th class="num" title="items new in this state (items on the field)">Items</th><th>Art</th></tr></thead>
+          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th class="num">#</th><th>State</th><th>Needs</th><th class="num" title="items new in this state (items on the field)">Items</th><th>Art</th><th>Notes</th></tr></thead>
           <tbody>${tl.states.map((st, i) => `<tr class="tl-row" data-state="${i}"><td class="num">${i}</td><td>${esc(st.label)}</td><td>${esc(st.requires)}</td>
-            <td class="num">${st.items ? `${st.items.added ? `+${st.items.added}` : '·'} (${st.items.shown})` : '—'}</td><td>${st.art ? esc(st.art) : '—'}</td></tr>`).join('')}</tbody></table></div>
+            <td class="num">${st.items ? `${st.items.added ? `+${st.items.added}` : '·'} (${st.items.shown})` : '—'}</td><td>${st.art ? esc(st.art) : '—'}</td>
+            <td title="${esc((st.notes || []).map((n) => n.text).join(' / '))}">${st.notes ? esc([...new Set(st.notes.map((n) => n.kind))].join(', ')) : '—'}</td></tr>`).join('')}</tbody></table></div>
           <p class="note">Each state is a point on the event's schedule: a date (UTC), often with an event stage that has to be cleared. Pick one to see which NPCs and items exist then. Read from the game's event schedule table (inferred: date and stage are both needed). "Art" is the field art that replaces the base one; only the base art is on the site.</p></section>` : ''}
+        ${tl && (noteRows.length || tl.hints?.length) ? `<section class="card"><h3>Field change notes <span class="sub">${noteRows.length + (tl.hints?.length || 0)}</span></h3>
+          <div class="table-scroll"><table class="roster keep-cols"><thead><tr><th>State</th><th>About</th><th>Note</th></tr></thead>
+          <tbody>${noteRows.map(({ i, st, n }) => `<tr class="tl-row" data-state="${i}"><td>${esc(st.label)}</td><td>${esc(n.kind)}</td><td>${esc(n.text)}</td></tr>`).join('')}
+          ${(tl.hints || []).map((h) => `<tr><td>—</td><td>${esc(h.kind)}</td><td>${esc(h.text)}</td></tr>`).join('')}</tbody></table></div>
+          <p class="note">The game's own notices: what changes on the map and among the NPCs when an event stage is cleared, and the popups about items and passcodes. A row's state is the first point of the schedule where that stage is cleared.</p></section>` : ''}
         ${npcs.length ? `<section class="card"><h3>NPCs <span class="sub">${npcs.length}</span></h3>
           <div class="table-scroll"><table class="roster keep-cols sticky-first"><thead><tr><th>NPC</th><th>Kind</th><th>Opens</th><th class="num">Lines</th></tr></thead>
           <tbody>${npcs.map((x) => row(x, `<td>${x.icon ? gameImg(x.icon.split('/')[0], x.icon.split('/')[1], 'char-icon') : ''}${esc(x.label)}</td><td>${esc(x.npcType || '—')}</td>
@@ -247,6 +255,8 @@ const Maps = (() => {
       const art = st.art ? (st.model ? `field art: ${st.art}` : `field art becomes ${st.art} (not on the site: showing the base art)`) : '';
       const items = st.items ? ` · ${st.items.shown} items on the field${st.items.added ? `, ${st.items.added} new` : ''}` : '';
       if (req) req.textContent = `${st.requires}${items}${art ? ` · ${art}` : ''}`;
+      const box = $('#tl-notes');
+      if (box) box.innerHTML = (st.notes || []).map((n) => `<div class="tl-note"><b>${esc(n.kind)}</b>${esc(n.text)}</div>`).join('');
       m.view?.setArt?.({ model: st.model || m.current.model, walkable: st.walkable || m.current.walkable });
       $('#reader').querySelectorAll('.tl-row').forEach((tr) => tr.classList.toggle('active', Number(tr.dataset.state) === m.state));
     }
