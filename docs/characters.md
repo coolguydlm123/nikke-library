@@ -267,7 +267,7 @@ These are not in the data.
 
 ## Extension points
 
-Optional local scripts can extend the Characters pages without being part of the site. `public/characters.js` defines `window.NL_EXT` (all lists empty by default): `hubCards` (cards on the landing page), `sidebarItems` (sidebar links), `routes` (`{ test(hash), page() }`) and `characterCards` (`{ has(x), fill(x, el) }`, a card on a Nikke's page). `Characters.kit` is the toolbox: the filter bar (`filtersHtml`, `bindFilters`, `matches`), `href`, the CP calculator fill (`applyCp`), `list` and `cpData`. `lib/api.js` loads an optional local server module that can add API routes and static aliases. None of this is used by the public site.
+Scripts can extend the Characters pages (My Nikkes does, see [my-nikkes.md](my-nikkes.md)). `public/characters.js` defines `window.NL_EXT` (all lists empty by default): `hubCards` (cards on the landing page), `sidebarItems` (sidebar links), `routes` (`{ test(hash), page() }`) and `characterCards` (`{ has(x), fill(x, el) }`, a card on a Nikke's page). `Characters.kit` is the toolbox: the filter bar (`filtersHtml`, `bindFilters`, `matches`), `href`, the CP calculator fill (`applyCp`), `list` and `cpData`. `lib/api.js` adds the API routes of the account module (`lib/account/index.js`).
 
 ## Known gaps
 

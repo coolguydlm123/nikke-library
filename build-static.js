@@ -14,7 +14,7 @@ const { stories, stages, bgm, raids, characters, eventGames, monsters, maps, mem
 
 // Every request the front end makes.
 function* requests() {
-  yield* ['/api/stories', '/api/storyline', '/api/stages', '/api/raids', '/api/jukebox', '/api/characters', '/api/cp-data', '/api/overload',
+  yield* ['/api/stories', '/api/storyline', '/api/stages', '/api/raids', '/api/jukebox', '/api/characters', '/api/cp-data', '/api/overload', '/api/account-lookup', '/api/shiftypad-script',
     '/api/minigames', '/api/tts', '/api/tts/missions', '/api/tts/skins', '/api/dicetrack', '/api/textadv', '/api/whitememory-play', '/api/eventgames',
     '/api/progression/outpost', '/api/progression/simulation', '/api/progression/levels', '/api/monsters', '/api/maps'];
   for (const m of maps.list) yield `/api/map?id=${encodeURIComponent(m.id)}`;
@@ -45,14 +45,11 @@ function* requests() {
 
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.cpSync(path.join(__dirname, 'public'), OUT, { recursive: true });
-// Local-only files never ship: drop the folder and the script tag that loads it.
-fs.rmSync(path.join(OUT, 'personal'), { recursive: true, force: true });
 const index = path.join(OUT, 'index.html');
 // Every release gets its own ?v= on scripts, styles and data requests, so browsers drop
 // the copies GitHub Pages lets them keep for 10 minutes.
 const BUILD = Date.now().toString(36);
 fs.writeFileSync(index, fs.readFileSync(index, 'utf8')
-  .replace(/[ \t]*<script src="personal\/index\.js"><\/script>\r?\n?/, '')
   .replace(/(src|href)="([\w./-]+\.(?:js|css))"/g, `$1="$2?v=${BUILD}"`)
   .replace('<script src="app.js', `<script>window.STATIC_API = true; window.BUILD = '${BUILD}';</script>\n  <script src="app.js`));
 fs.writeFileSync(path.join(OUT, '.nojekyll'), ''); // serve files as-is (no Jekyll pass)
@@ -79,27 +76,40 @@ for (const req of requests()) {
 console.log(`Wrote ${files} API files (${(bytes / 1048576).toFixed(1)} MB) to ${OUT} in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 if (missing.length) console.log(`${missing.length} request(s) had no data, e.g. ${missing.slice(0, 5).join(', ')}`);
 
-// Guard: the site and the docs must not mention the personal pages or files. A leak fails the build.
-// (Written in pieces so this file doesn't itself contain the names it guards against.)
-const FORBIDDEN = new RegExp(['shifty' + 'pad', 'my' + 'nikkes', 'nikke-' + 'account', 'account-' + 'lookup', 'person' + 'al/'].join('|'), 'i');
-const TEXT = new Set(['.js', '.html', '.css', '.json', '.md', '.txt', '.svg']);
-const leaks = [];
-(function scan(dir, skip) {
-  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) { if (!skip(p)) scan(p, skip); continue; }
-    if (TEXT.has(path.extname(ent.name).toLowerCase()) && FORBIDDEN.test(fs.readFileSync(p, 'utf8'))) leaks.push(p);
-  }
-})(OUT, () => false);
-(function scan(dir) {
-  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) { if (p !== path.join(__dirname, 'docs', 'personal')) scan(p); continue; }
-    if (TEXT.has(path.extname(ent.name).toLowerCase()) && FORBIDDEN.test(fs.readFileSync(p, 'utf8'))) leaks.push(p);
-  }
-})(path.join(__dirname, 'docs'));
-if (leaks.length) {
-  console.error(`BUILD FAILED: personal names found in ${leaks.length} file(s):\n  ${leaks.slice(0, 20).join('\n  ')}`);
+// Guard: real account identifiers must never ship. local/markers.txt (gitignored, one string per
+// line; # starts a comment) lists them; the build FAILS if any appears in dist/, docs/ or any
+// tracked file. Only file names are reported, never the strings themselves.
+const markersFile = path.join(__dirname, 'local', 'markers.txt');
+if (!fs.existsSync(markersFile)) {
+  console.error('BUILD FAILED: local/markers.txt is missing. It lists the real account identifiers (one per line) the leak guard looks for.');
   process.exit(1);
 }
-console.log('Guard passed: no personal names in the build or docs.');
+const markers = fs.readFileSync(markersFile, 'utf8').split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#')).map((l) => l.toLowerCase());
+if (!markers.length) {
+  console.error('BUILD FAILED: local/markers.txt has no identifiers, so the leak guard would check nothing.');
+  process.exit(1);
+}
+const BINARY = new Set(['.webp', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.mp3', '.ogg', '.wav', '.mp4', '.glb', '.woff', '.woff2', '.zip']);
+const leaks = new Set();
+const check = (file) => {
+  if (BINARY.has(path.extname(file).toLowerCase())) return;
+  const text = fs.readFileSync(file, 'utf8').toLowerCase();
+  if (markers.some((m) => text.includes(m))) leaks.add(path.relative(__dirname, file));
+};
+const walk = (dir) => {
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, ent.name);
+    if (ent.isDirectory()) walk(p); else check(p);
+  }
+};
+walk(OUT);
+walk(path.join(__dirname, 'docs'));
+for (const f of require('child_process').execFileSync('git', ['ls-files', '-z'], { cwd: __dirname, maxBuffer: 1 << 26 }).toString('utf8').split('\0').filter(Boolean)) {
+  const p = path.join(__dirname, f);
+  if (fs.existsSync(p)) check(p);
+}
+if (leaks.size) {
+  console.error(`BUILD FAILED: real account identifiers (from local/markers.txt) found in ${leaks.size} file(s):\n  ${[...leaks].slice(0, 20).join('\n  ')}`);
+  process.exit(1);
+}
+console.log(`Guard passed: none of the ${markers.length} identifiers in local/markers.txt appear in the build, docs or tracked files.`);

@@ -256,7 +256,20 @@ const Maps = (() => {
       const items = st.items ? ` · ${st.items.shown} items on the field${st.items.added ? `, ${st.items.added} new` : ''}` : '';
       if (req) req.textContent = `${st.requires}${items}${art ? ` · ${art}` : ''}`;
       const box = $('#tl-notes');
-      if (box) box.innerHTML = (st.notes || []).map((n) => `<div class="tl-note"><b>${esc(n.kind)}</b>${esc(n.text)}</div>`).join('');
+      if (box) {
+        // the game's notes for this state, then the latest map / NPC note from an earlier state (it still describes the field)
+        const here = st.notes || [];
+        const carried = [];
+        for (const kind of ['Map', 'NPCs']) {
+          if (here.some((n) => n.kind === kind)) continue;
+          for (let j = m.state - 1; j >= 0; j--) {
+            const n = tl.states[j].notes?.find((x) => x.kind === kind);
+            if (n) { carried.push({ ...n, since: tl.states[j].label }); break; }
+          }
+        }
+        box.innerHTML = here.map((n) => `<div class="tl-note"><b>${esc(n.kind)}</b>${esc(n.text)}</div>`).join('')
+          + carried.map((n) => `<div class="tl-note carried"><b>${esc(n.kind)}</b>${esc(n.text)} <i>since ${esc(n.since)}</i></div>`).join('');
+      }
       m.view?.setArt?.({ model: st.model || m.current.model, walkable: st.walkable || m.current.walkable });
       $('#reader').querySelectorAll('.tl-row').forEach((tr) => tr.classList.toggle('active', Number(tr.dataset.state) === m.state));
     }
@@ -725,7 +738,7 @@ const Maps = (() => {
       const before = shownUrl;
       shownUrl = url;
       const mine = ++token;
-      if (model) box.insertAdjacentHTML('beforeend', '<div class="map-status">Loading art…</div>');
+      if (model && !box.querySelector('.map-status')) box.insertAdjacentHTML('beforeend', '<div class="map-status">Loading art…</div>');
       let gltf;
       try {
         gltf = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(url, (e) => {
@@ -733,7 +746,7 @@ const Maps = (() => {
           if (st && e.total) st.textContent = `Loading ${model ? 'art' : 'map'}… ${Math.round((e.loaded / e.total) * 100)}%`;
         });
       } catch (err) {
-        if (mine === token) { shownUrl = before; ready = true; refresh(); if (model) box.querySelector('.map-status')?.remove(); }
+        if (mine === token) { shownUrl = before; ready = true; refresh(); if (model) box.querySelectorAll('.map-status').forEach((e) => e.remove()); }
         throw err; // first load: no model, still show the markers
       }
       if (disposed || mine !== token) { freeModel(gltf.scene); return; }
@@ -742,6 +755,15 @@ const Maps = (() => {
       if (disposed || mine !== token) { freeModel(gltf.scene); return; }
       backdrop.length = 0;
       gltf.scene.traverse((o) => { if (o.userData?.backdrop) backdrop.push(o); });
+      // glow quads (the game's additive shaders, flagged extras.additive by maps.py): colour added onto the scene
+      gltf.scene.traverse((mesh) => {
+        if (!mesh.isMesh || !mesh.material?.userData?.additive) return;
+        const old = mesh.material;
+        mesh.material = new THREE.MeshBasicMaterial({ map: old.map, color: old.color, transparent: true, opacity: old.opacity,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+        mesh.renderOrder = 5;
+        old.dispose();
+      });
       gltf.scene.traverse((o) => {
         const lm = o.userData?.lm;
         if (lm == null || !lightmaps[lm]) return;
@@ -756,7 +778,7 @@ const Maps = (() => {
           return tex;
         };
         o.traverse((mesh) => {
-          if (!mesh.isMesh) return;
+          if (!mesh.isMesh || mesh.material.blending === THREE.AdditiveBlending) return;
           const old = mesh.material;
           // Unity falls back to the first UV set when a mesh has no lightmap UVs
           const tex = lmTex(mesh.geometry.attributes.uv1 ? 1 : 0);
@@ -768,7 +790,7 @@ const Maps = (() => {
       if (model) { scene.remove(model); freeModel(model); }
       scene.add(gltf.scene);
       model = gltf.scene;
-      box.querySelector('.map-status')?.remove();
+      box.querySelectorAll('.map-status').forEach((e) => e.remove());
       ready = true;
       refresh();
     }

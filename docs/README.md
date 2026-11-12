@@ -13,6 +13,7 @@ anything uncertain is marked as such.
 | [monsters.md](monsters.md) | Monster models and variants, elements, Exceed, generations (Rapture / Dark Matter), classes, skills, parts, where they appear |
 | [maps.md](maps.md) | 3D campaign field maps and their markers |
 | [characters.md](characters.md) | Nikke profiles and costumes, CP formula, Overload gear and the roll simulator, filters |
+| [my-nikkes.md](my-nikkes.md) | My Nikkes: importing your own account (Shiftypad export), the management views, privacy |
 | [minigames/README.md](minigames/README.md) | Tracing the Stars, VOLT TRIP, Fading Affection and every event minigame, one file each |
 | [progression.md](progression.md) | Outpost, simulation room and Overclock, level-up and Synchro Device costs |
 | [jukebox.md](jukebox.md) | Albums, tracks and the story scenes that play them |

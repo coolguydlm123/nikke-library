@@ -1,6 +1,5 @@
 // Nikke Library — playable characters.
-// Extension points: an optional local script can add to these lists before the pages render (all empty
-// here): hubCards {href,title,text}, sidebarItems {href,title,note}, routes {test(hash), page()},
+// Extension points: a script loaded after this one (public/account/) adds to these lists before the pages render: hubCards {href,title,text}, sidebarItems {href,title,note}, routes {test(hash), page()},
 // characterCards {has(x), fill(x, el)} (a card on a Nikke's page). Characters.kit is its toolbox.
 window.NL_EXT = window.NL_EXT || { hubCards: [], sidebarItems: [], routes: [], characterCards: [] };
 const Characters = (() => {
