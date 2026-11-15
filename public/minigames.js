@@ -1,6 +1,6 @@
 // Nikke Library — minigames. Tracing the Stars: songs, albums, missions, skins.
 const Minigames = (() => {
-  const m = { tts: null, missions: null, skins: null, page: null };
+  const m = { tts: null, missions: null, skins: null, page: null, charts: {} };
   const fmt = (n) => Number(n).toLocaleString('en-US');
   const day = (iso) => (iso ? iso.slice(0, 10) : null);
   const base = '#/minigame/tts';
@@ -82,7 +82,9 @@ const Minigames = (() => {
     m.extraTree = null;
     const album = h.match(/^#\/minigame\/tts\/songs\/(\d+)/);
     const song = h.match(/^#\/minigame\/tts\/song\/(\d+)/);
-    if (album) m.page = { kind: 'songs', album: Number(album[1]) };
+    const chart = h.match(/^#\/minigame\/tts\/chart\/(\d+)(?:\/(\w+))?/);
+    if (chart) m.page = { kind: 'chart', song: Number(chart[1]), diff: chart[2] || null };
+    else if (album) m.page = { kind: 'songs', album: Number(album[1]) };
     else if (/\/songs$/.test(h)) m.page = { kind: 'songs', album: null };
     else if (song) {
       // Old per-song links open the song's album with its row highlighted.
@@ -92,10 +94,14 @@ const Minigames = (() => {
     else if (/\/skins$/.test(h)) m.page = { kind: 'skins' };
     else if (/\/help$/.test(h)) m.page = { kind: 'help' };
     else m.page = { kind: 'overview' };
+    if (m.page.kind === 'chart' && !m.charts[m.page.song]) {
+      const r = await apiFetch(`/api/tts/chart?song=${m.page.song}`);
+      m.charts[m.page.song] = r.ok ? await r.json() : { error: true };
+    }
     if (m.page.kind === 'missions' && !m.missions) m.missions = await (await apiFetch('/api/tts/missions')).json();
     if (m.page.kind === 'skins' && !m.skins) m.skins = await (await apiFetch('/api/tts/skins')).json();
     renderTree();
-    ({ overview, songs: songsPage, missions: missionsPage, skins: skinsPage, help: helpPage })[m.page.kind]();
+    ({ overview, songs: songsPage, chart: chartPage, missions: missionsPage, skins: skinsPage, help: helpPage })[m.page.kind]();
     $('#reader').scrollTop = 0;
     $('#reader .is-target')?.scrollIntoView({ block: 'center' });
   }
@@ -173,7 +179,7 @@ const Minigames = (() => {
         <table><thead><tr><th>Grade</th><th class="num">From score</th><th class="num">Min rating</th><th class="num">Max rating</th></tr></thead>
         <tbody>${rows}</tbody></table><div class="key">S+ max is at the song's max score${l.maxScore != null ? ` (${fmt(l.maxScore)})` : ''}.</div></div>`;
     };
-    const levelCell = (l) => `<td class="lv-cell has-tip" tabindex="0">${ratingTip(l)}<span class="lv lv-${DIFF_CLASS[l.difficulty]}">${l.level}</span>
+    const levelCell = (l, s) => `<td class="lv-cell has-tip" tabindex="0">${ratingTip(l)}${l.hasChart ? `<a class="lv-link" href="${base}/chart/${s.id}/${l.difficulty}" title="Open the ${l.difficulty} chart"><span class="lv lv-${DIFF_CLASS[l.difficulty]}">${l.level}</span></a>` : `<span class="lv lv-${DIFF_CLASS[l.difficulty]}">${l.level}</span>`}
       ${l.ratio != null ? `<span class="ratio">Ratio ${l.ratio}</span>` : ''}
       <span class="key">${l.maxScore != null ? fmt(l.maxScore) : '—'}</span></td>`;
 
@@ -190,9 +196,9 @@ const Minigames = (() => {
           <th>Unlock</th><th>Jukebox</th></tr></thead><tbody>
           ${songs.map((s, i) => `<tr class="${m.page.highlight === s.id ? 'is-target' : ''}">
             <td class="num key">${i + 1}</td>
-            <td><div class="roster-name">${gameImg('tts', s.cover, 'tts-cover')}<div><div class="track-name">${esc(s.name)}</div><div class="key">${esc(s.artist)}</div></div></div></td>
+            <td><div class="roster-name">${gameImg('tts', s.cover, 'tts-cover')}<div><div class="track-name">${s.levels.some((l) => l.hasChart) ? `<a href="${base}/chart/${s.id}">${esc(s.name)}</a>` : esc(s.name)}</div><div class="key">${esc(s.artist)}</div></div></div></td>
             ${all ? `<td><a href="${base}/songs/${s.album}">${esc(albumName(s.album))}</a></td>` : ''}
-            ${s.levels.map(levelCell).join('')}
+            ${s.levels.map((l) => levelCell(l, s)).join('')}
             <td class="obtain">${unlockText(s)}</td>
             <td>${s.jukebox ? `<a href="#/jukebox/${s.jukebox.album}">${esc(s.jukebox.albumName)}</a>` : '<span class="key">—</span>'}</td>
           </tr>`).join('')}
@@ -200,6 +206,20 @@ const Minigames = (() => {
           <p class="key note">Each difficulty shows its level, its ratio (normal_ratio / hard_ratio / … in the song table) and the max score.</p>`
         : `<p class="key">${album && !album.songs.length ? 'This album is listed but its songs are not in the data yet.' : 'No songs match the filter.'}</p>`}
       </section></div>`;
+  }
+
+  function chartPage() {
+    const data = m.charts[m.page.song];
+    const s = m.tts.songs.find((x) => x.id === m.page.song);
+    const album = s && m.tts.albums.find((a) => a.id === s.album);
+    if (!data || data.error) {
+      $('#reader').innerHTML = head([m.tts.name, 'Songs'], s ? esc(s.name) : 'Chart', '<p class="album-desc">No chart data for this song.</p>');
+      return;
+    }
+    $('#reader').innerHTML = head([m.tts.name, 'Songs'], esc(data.name),
+      `${gameImg('tts', s?.cover, 'tts-album-cover')}<p class="album-desc">${esc(data.artist || '')}${album ? ` · <a href="${base}/songs/${album.id}">${esc(album.name)}</a>` : ''} · <a href="${base}/songs${album ? `/${album.id}` : ''}">back to songs</a></p>`) +
+      '<div class="stage-body"><section class="card"><div id="tts-chart"></div></section></div>';
+    TtsChart.mount($('#tts-chart'), data, { difficulty: m.page.diff });
   }
 
   function rewardText(r) {

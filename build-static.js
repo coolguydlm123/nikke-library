@@ -17,6 +17,7 @@ function* requests() {
   yield* ['/api/stories', '/api/storyline', '/api/stages', '/api/raids', '/api/jukebox', '/api/characters', '/api/cp-data', '/api/overload', '/api/account-lookup', '/api/shiftypad-script',
     '/api/minigames', '/api/tts', '/api/tts/missions', '/api/tts/skins', '/api/dicetrack', '/api/textadv', '/api/whitememory-play', '/api/eventgames',
     '/api/progression/outpost', '/api/progression/simulation', '/api/progression/levels', '/api/monsters', '/api/maps'];
+  for (const s of libs.minigames.songs) if (s.levels.some((l) => l.hasChart)) yield `/api/tts/chart?song=${s.id}`;
   for (const m of maps.list) yield `/api/map?id=${encodeURIComponent(m.id)}`;
   for (const id of stories.scenes.keys()) yield `/api/scene?id=${encodeURIComponent(id)}`;
   for (const id of memorials.pages.keys()) yield `/api/scene?id=${id}`;

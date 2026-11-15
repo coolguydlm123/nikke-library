@@ -249,6 +249,14 @@ From `EventTTSSkinObjectTable` (`skin_object_type` BG / Character / Note, `is_fr
 | Candy Notes | Note | Gem ×100 | 2026-07-02 |
 | Fusion Cell Notes | Note | Gem ×100 | 2026-10-28 |
 
+## Chart viewer
+
+Clicking a song's name or a difficulty level in the song table opens its note chart (`#/minigame/tts/chart/<song id>/<difficulty>`). The chart files are not encrypted: they are the `audiogroup_assets_tts_music_edit_<song>-{cl,nm,hd,ex}` bundles (`dp` project), each one `TtsBinaryAsset` (`NK.UI.View.MiniGame.TTS.Local.Parser`). `nikke-downloader/tts_pattern.py` reads them and `tts_charts_export.py` writes `nikke-downloader/tts-charts.json` (path in `config.json` as `ttsChartsFile`); `lib/minigames.js` serves one song at a time from `/api/tts/chart?song=<id>`.
+
+- Views: the whole chart in columns (4, 8 or 16 bars each), or a playback highway with speed, rate and offset. Lanes can be drawn as in the game (shift notes at the sides, Space across the four keys) or as 7 equal keys (L Shift, D, F, Space, J, K, R Shift).
+- Format: ticks are 48 per beat (192 per bar); tracks 3, 4, 6, 7 are the D F J K keys, track 5 the Space note, tracks 10 and 11 the shift notes; a note's `extra` field is `(hold length in ticks << 8) | low byte`.
+- Not verified in game: the left-to-right order of the four keys, which shift track is the left one, the hold length rule, and what the low byte of shift notes means. Judgement windows and scoring are still not in the data.
+
 ## Data sources
 
 | Table | Used for |
@@ -269,4 +277,4 @@ From `EventTTSSkinObjectTable` (`skin_object_type` BG / Character / Note, `is_fr
 - The base of the rating formula (level vs ratio ÷ 10), see above.
 - Note speed option units.
 - How `tag` values (e.g. TTSTAR, Event, Vocal) are used in game (only listed).
-- Judgement windows and per-note scoring are not in these tables.
+- Judgement windows and per-note scoring are not in these tables (the note charts are in `tts-charts.json`, see Chart viewer).

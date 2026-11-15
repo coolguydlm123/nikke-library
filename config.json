@@ -7,5 +7,6 @@
   "localeDir": "D:/Nikke Datamine/nikke-downloader/json-locale",
   "language": "en",
   "imageDir": "D:/Nikke Datamine/nikke-downloader/image",
-  "mapsDir": "D:/Nikke Datamine/nikke-downloader/maps"
+  "mapsDir": "D:/Nikke Datamine/nikke-downloader/maps",
+  "ttsChartsFile": "D:/Nikke Datamine/nikke-downloader/tts-charts.json"
 }
