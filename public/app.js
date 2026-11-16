@@ -162,6 +162,7 @@ async function init() {
     else if (section === 'characters') Characters.renderTree();
     else if (section === 'minigames') { Minigames.renderTree(); Minigames.rerender(); }
     else if (section === 'progression') Progression.renderTree();
+    else if (section === 'shop') Shop.renderTree();
     else if (section === 'monsters') { Monsters.renderTree(); Monsters.route(); }
     else if (section === 'maps') { Maps.renderTree(); if (!/^#\/map\//.test(location.hash)) Maps.route(); }
     else if (section === 'jukebox') { Jukebox.renderTree(); Jukebox.rerender(); }
@@ -217,6 +218,7 @@ const SECTIONS = [
   { id: 'characters', href: '#/characters', title: 'Characters', text: 'Nikke profiles, costumes and the CP calculator.' },
   { id: 'minigames', href: '#/minigames', title: 'Minigames', text: 'Tracing the Stars, VOLT TRIP, Fading Affection and every event minigame.' },
   { id: 'progression', href: '#/progression', title: 'Progression', text: 'Outpost, simulation room and level costs.' },
+  { id: 'shop', href: '#/shop', title: 'Shop & Gacha', text: 'Recruit banners and rates, passes, packages and login rewards.' },
   { id: 'jukebox', href: '#/jukebox', title: 'Jukebox', text: 'Albums and tracks, and the story scenes that play them.' },
   { id: 'misc', href: '#/misc', title: 'Misc', text: 'The Story Line timeline, and other pages that fit nowhere else.' },
 ];
@@ -262,6 +264,10 @@ async function dispatch() {
   if (/^#\/minigame/.test(location.hash)) {
     if (enterSection('minigames')) await Minigames.enter();
     return Minigames.route();
+  }
+  if (location.hash.startsWith('#/shop')) {
+    if (enterSection('shop')) await Shop.enter();
+    return Shop.route();
   }
   if (/^#\/character/.test(location.hash)) {
     if (enterSection('characters')) await Characters.enter();

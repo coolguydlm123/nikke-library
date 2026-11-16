@@ -189,7 +189,7 @@ button { font: inherit; color: inherit; }
 .badge.cat-hard { color: #ffb36b; border-color: #6b4a2f; }
 .badge.cat-extra { color: #b99cff; border-color: #4a3b6b; }
 
-.stage-body { max-width: 960px; margin: 0 auto; padding: 20px 32px 80px; display: grid; gap: 14px; }
+.stage-body { max-width: min(1400px, 100%); margin: 0 auto; padding: 20px 32px 80px; display: grid; gap: 14px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; min-width: 0; }
 .card h3 { margin: 0 0 10px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .card h3 .sub { color: var(--dim); font-weight: 400; margin-left: 4px; }
@@ -701,11 +701,11 @@ tr.unseen td { opacity: .55; }
 .mon-variants a { color: inherit; text-decoration: none; }
 
 /* Home */
-.home { max-width: 980px; margin: 0 auto; padding: 32px 24px 48px; }
+.home { max-width: min(1560px, 100%); margin: 0 auto; padding: 32px 32px 48px; }
 .home h1 { margin: 0 0 4px; font-size: 26px; }
 .home-sub { margin: 0 0 20px; color: var(--muted); }
-.home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.home-card { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 10px; text-decoration: none; color: var(--text);
+.home-grid { display: flex; flex-wrap: wrap; gap: 12px; } /* cards grow, so the last row fills the width too */
+.home-card { flex: 1 1 240px; max-width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 10px; text-decoration: none; color: var(--text);
   background: var(--panel); border: 1px solid var(--border); }
 .home-card:hover { border-color: var(--accent); }
 .home-card b { font-size: 16px; }
@@ -867,3 +867,9 @@ body.at-home .sidebar { display: none; }
 .tc-canvas { display: block; width: 100%; background: #15151a; border-radius: 10px; }
 .tc-seek { width: 100%; margin-top: 8px; }
 .tc-note { margin-top: 8px; }
+
+/* Shop & Gacha: items in a contents cell sit side by side and wrap as whole items. */
+.shop-item { display: inline-flex; align-items: center; margin: 1px 12px 1px 0; white-space: nowrap; }
+.shop-item details.box { white-space: normal; margin-left: 6px; }
+.roster td:has(> .shop-item) { min-width: 240px; white-space: normal; }
+.roster.sticky-first.shop-names tbody td:first-child { white-space: normal; min-width: 130px; max-width: 190px; } /* long names wrap instead of filling the phone */

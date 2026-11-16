@@ -16,7 +16,11 @@ const { stories, stages, bgm, raids, characters, eventGames, monsters, maps, mem
 function* requests() {
   yield* ['/api/stories', '/api/storyline', '/api/stages', '/api/raids', '/api/jukebox', '/api/characters', '/api/cp-data', '/api/overload', '/api/account-lookup', '/api/shiftypad-script',
     '/api/minigames', '/api/tts', '/api/tts/missions', '/api/tts/skins', '/api/dicetrack', '/api/textadv', '/api/whitememory-play', '/api/eventgames',
-    '/api/progression/outpost', '/api/progression/simulation', '/api/progression/levels', '/api/monsters', '/api/maps'];
+    '/api/progression/outpost', '/api/progression/simulation', '/api/progression/levels', '/api/monsters', '/api/maps',
+    '/api/shop/gacha', '/api/shop/passes', '/api/shop/packages', '/api/shop/login'];
+  for (const g of libs.shop.gacha) yield `/api/shop/banner?id=${g.id}`;
+  for (const p of libs.shop.packages) yield `/api/shop/package?id=${p.id}`;
+  for (const l of libs.shop.login) yield `/api/shop/login-event?id=${l.id}`;
   for (const s of libs.minigames.songs) if (s.levels.some((l) => l.hasChart)) yield `/api/tts/chart?song=${s.id}`;
   for (const m of maps.list) yield `/api/map?id=${encodeURIComponent(m.id)}`;
   for (const id of stories.scenes.keys()) yield `/api/scene?id=${encodeURIComponent(id)}`;
