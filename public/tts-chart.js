@@ -54,7 +54,7 @@ window.TtsChart = (() => {
   function mount(root, data, opts = {}) {
     const state = {
       diff: data.diffs.find((d) => d.difficulty === opts.difficulty) || data.diffs[data.diffs.length - 1],
-      view: 'full', layout: '7k', swap: false, barsPerCol: 16, zoom: 100, speed: 170, rate: 1, offset: 0,
+      view: 'full', layout: '7k', swap: false, barsPerCol: 16, zoom: 100, vzoom: 100, speed: 170, rate: 1, offset: 0,
       t: 0, playing: false, last: 0,
     };
     root.innerHTML = `
@@ -65,7 +65,8 @@ window.TtsChart = (() => {
           <span class="tc-group" data-group="layout"><button data-v="game">Game layout</button><button data-v="7k">7K</button></span>
           <label class="tc-opt" title="Which of the two shift tracks is left is a guess"><input type="checkbox" data-opt="swap"> swap shift sides</label>
           <label class="tc-opt tc-full-only">Bars per column <select data-opt="bars"><option>4</option><option>8</option><option selected>16</option><option>32</option></select></label>
-          <label class="tc-opt tc-full-only">Zoom <input type="range" data-opt="zoom" min="50" max="400" step="10" value="100" style="width:110px"> <span class="tc-zv">100%</span></label>
+          <label class="tc-opt tc-full-only">Width <input type="range" data-opt="zoom" min="50" max="400" step="10" value="100" style="width:110px"> <span class="tc-zv">100%</span></label>
+          <label class="tc-opt tc-full-only">Vertical zoom <input type="range" data-opt="vzoom" min="50" max="800" step="10" value="100" style="width:130px"> <span class="tc-vv">100%</span></label>
           <span class="tc-info key"></span>
         </div>
         <div class="tc-row tc-play-only">
@@ -133,7 +134,7 @@ window.TtsChart = (() => {
       const unit = 12 * z;
       const colW = width * unit;
       const gap = 26;
-      const pxBeat = 5 * z;
+      const pxBeat = 5 * state.vzoom / 100;
       const colTicks = state.barsPerCol * TICKS_PER_BAR;
       const colH = state.barsPerCol * 4 * pxBeat;
       const totalCols = Math.max(1, Math.ceil(chart.e / colTicks));
@@ -240,6 +241,7 @@ window.TtsChart = (() => {
       if (!o) return;
       if (o === 'swap') state.swap = e.target.checked;
       if (o === 'zoom') { state.zoom = Number(e.target.value); const zv = $('.tc-zv'); if (zv) zv.textContent = state.zoom + '%'; }
+      if (o === 'vzoom') { state.vzoom = Number(e.target.value); const vv = $('.tc-vv'); if (vv) vv.textContent = state.vzoom + '%'; }
       if (o === 'bars') state.barsPerCol = Number(e.target.value);
       if (o === 'speed') state.speed = Number(e.target.value);
       if (o === 'rate') state.rate = Number(e.target.value);
