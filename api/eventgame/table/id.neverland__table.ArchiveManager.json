@@ -1,0 +1,1 @@
+{"game":"Snowfall Oasis (Dating Sim)","table":"EventDatingSimArchiveManagerTable","name":"ArchiveManager","columns":[{"key":"id","label":"Id"},{"key":"event_id","label":"Event id"},{"key":"exist_manager_id","label":"Exist manager id"}],"rows":[[1001,80903,1001]]}

@@ -1,0 +1,1 @@
+{"id":10033,"name":"Daily Login Event","system":"LoginEvent","character":{"code":5053,"name":"Kilo","rarity":"SSR","icon":"si_c361_00_s"},"days":1,"goals":1,"replenish":null,"dayList":[{"day":1,"goal":true,"reward":[{"type":"Character","id":136101,"name":"Kilo","amount":1,"chance":100},{"type":"Currency","id":5200,"name":"Advanced Recruit Voucher","amount":10,"chance":100}]}]}

@@ -1,0 +1,1 @@
+{"id":9420102,"corpNames":{"NONE":"No manufacturer","MISSILIS":"Missilis","TETRA":"Tetra","ELYSION":"Elysion","ABNORMAL":"Abnormal","PILGRIM":"Pilgrim"},"entries":[{"type":"Currency","id":2000,"name":"Credit","min":10000,"max":20000,"chance":50},{"type":"Currency","id":2000,"name":"Credit","min":20001,"max":30000,"chance":50}]}

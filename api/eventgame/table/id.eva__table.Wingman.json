@@ -1,0 +1,1 @@
+{"game":"EVANGELION: RedSea Scout","table":"EventEvaMiniGameWingmanTable","name":"Wingman","columns":[{"key":"id","label":"Id"},{"key":"event_id","label":"Event id"},{"key":"characterasset","label":"Characterasset"},{"key":"weaponsets","label":"Weaponsets"}],"rows":[[1,81901,"Wingman2","401"],[2,81901,"Wingman2","402"],[3,81901,"Wingman2-L","403"],[4,81901,"Wingman2-R","404"]]}

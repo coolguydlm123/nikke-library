@@ -1,0 +1,1 @@
+{"id":10054,"name":"Daily Login Event","system":"LoginEvent","character":{"code":5139,"name":"Mori","rarity":"SSR","icon":"si_c590_00_s"},"days":1,"goals":1,"replenish":null,"dayList":[{"day":1,"goal":true,"reward":[{"type":"Character","id":159001,"name":"Mori","amount":1,"chance":100},{"type":"Currency","id":5200,"name":"Advanced Recruit Voucher","amount":10,"chance":100}]}]}
