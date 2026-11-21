@@ -24,6 +24,7 @@ const fmtNum = (n) => (n == null || n === '' ? '—' : Number(n).toLocaleString(
 // 1,234,567 -> "1.23M" with the exact value on hover; below 10,000 stays exact.
 const fmtShort = (n) => {
   if (n == null || n === '') return '—';
+  if (store.get('fullNumbers', false)) return fmtNum(n); // header toggle: always show the whole number
   const v = Number(n), a = Math.abs(v);
   const [d, u] = a >= 1e9 ? [1e9, 'B'] : a >= 1e6 ? [1e6, 'M'] : a >= 1e4 ? [1e3, 'K'] : [1, ''];
   return u ? `<span title="${fmtNum(v)}">${+(v / d).toFixed(v / d >= 100 ? 0 : 2)}${u}</span>` : fmtNum(v);
@@ -174,6 +175,11 @@ async function init() {
   $('#nav-select').innerHTML = `<option value="home">Home</option>${SECTIONS.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}`;
   $('#nav-select').onchange = (e) => { location.hash = e.target.value === 'home' ? '#/' : SECTIONS.find((s) => s.id === e.target.value).href; };
   $('#tree').addEventListener('click', (e) => { if (e.target.closest('a')) setBrowse(false); });
+  // Header toggle: big numbers as 1.23M (default) or written out in full (1,234,567); remembered in this browser.
+  const numBtn = $('#num-toggle');
+  const showNumMode = () => { const full = store.get('fullNumbers', false); numBtn.textContent = full ? '1,234' : '1.2K'; numBtn.setAttribute('aria-pressed', String(full)); numBtn.title = full ? 'Showing full numbers (click for short)' : 'Showing short numbers like 1.2M (click for full)'; };
+  numBtn.onclick = () => { store.set('fullNumbers', !store.get('fullNumbers', false)); showNumMode(); dispatch(); };
+  showNumMode();
   window.addEventListener('hashchange', dispatch);
   dispatch();
 }

@@ -122,11 +122,13 @@ const Minigames = (() => {
     const events = Object.entries(g).filter(([id, x]) => x && !MAIN_GAMES.includes(id));
     $('#reader').innerHTML = hubHtml({
       title: 'Minigames',
-      text: `${main.length + events.length} minigames: the three standing ones, and every event minigame with its rules, stages and rewards.`,
-      groups: [
-        { title: 'Minigames', cards: main.map((x) => ({ href: `#/minigame/${x.id}`, title: g[x.id].name, text: x.text, n: x.n, img: x.cover ? `img/tts/${x.cover}.webp` : img(g[x.id].img) })) },
-        { title: 'Event minigames', cards: events.map(([id, x]) => ({ href: `#/minigame/${id}`, title: x.name, text: x.text, img: img(x.img) })) },
-      ],
+      text: `${main.length + events.length} minigames, standing ones first, then every event minigame with its rules, stages and rewards.`,
+      groups: [{
+        cards: [
+          ...main.map((x) => ({ href: `#/minigame/${x.id}`, title: g[x.id].name, text: x.text, n: x.n, img: x.cover ? `img/tts/${x.cover}.webp` : img(g[x.id].img) })),
+          ...events.map(([id, x]) => ({ href: `#/minigame/${id}`, title: x.name, text: x.text, img: img(x.img) })),
+        ],
+      }],
     });
     $('#reader').scrollTop = 0;
   }
