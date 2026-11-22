@@ -1,0 +1,1 @@
+{"id":9420201,"corpNames":{"NONE":"No manufacturer","MISSILIS":"Missilis","TETRA":"Tetra","ELYSION":"Elysion","ABNORMAL":"Abnormal","PILGRIM":"Pilgrim"},"entries":[{"type":"Currency","id":99,"name":"Gem","min":100,"max":200,"chance":50},{"type":"Currency","id":99,"name":"Gem","min":201,"max":300,"chance":50}]}

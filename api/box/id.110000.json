@@ -1,0 +1,1 @@
+{"id":110000,"corpNames":{"NONE":"No manufacturer","MISSILIS":"Missilis","TETRA":"Tetra","ELYSION":"Elysion","ABNORMAL":"Abnormal","PILGRIM":"Pilgrim"},"entries":[{"type":"Item","id":7031001,"name":"Common Building Material","icon":{"family":"icons-material","name":"icn_material_outpost_all"},"min":1,"max":2,"chance":100}]}

@@ -1,0 +1,1 @@
+{"game":"In The Mirror","table":"EventQuestMVGTutorialConditionTable","name":"QuestMVGTutorialCondition","columns":[{"key":"id","label":"Id"},{"key":"helptip_id","label":"Helptip id"},{"key":"helptip_active_condition","label":"Helptip active condition"},{"key":"helptip_active_condition_value","label":"Helptip active condition value"}],"rows":[[1,10100,"EnterGuidePointFirst",1]]}

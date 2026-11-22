@@ -1,0 +1,1 @@
+{"game":"Tower Defense (Last Kingdom)","table":"EventTowerDefenseArcadeManagerTable","name":"ArcadeManager","columns":[{"key":"id","label":"Id"},{"key":"arcade_event_id","label":"Arcade event id"},{"key":"exist_manager_id","label":"Exist manager id"},{"key":"arcade_mission_group_id","label":"Arcade mission group id"}],"rows":[[1001,1003,1001,2001]]}

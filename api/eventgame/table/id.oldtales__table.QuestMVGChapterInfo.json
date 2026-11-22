@@ -1,0 +1,1 @@
+{"game":"In The Mirror","table":"EventQuestMVGChapterInfoTable","name":"QuestMVGChapterInfo","columns":[{"key":"id","label":"Id"},{"key":"chapter_name","label":"Chapter name"},{"key":"chapter_img","label":"Chapter img"}],"rows":[[0,"(In) Mirror World",{"img":"img_mvg_chapter_0"}]]}

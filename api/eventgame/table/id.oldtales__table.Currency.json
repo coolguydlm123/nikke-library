@@ -1,0 +1,1 @@
+{"game":"In The Mirror","table":"EventMVGCurrencyTable","name":"Currency","columns":[{"key":"id","label":"Id"},{"key":"category","label":"Category"},{"key":"iconresource","label":"Iconresource"}],"rows":[[1,"Gold",{"img":"icn_mvg_currency_gold"}],[2,"Core",{"img":"icn_mvg_currency_core"}]]}

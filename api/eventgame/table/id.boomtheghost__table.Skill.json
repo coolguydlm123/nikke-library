@@ -1,0 +1,1 @@
+{"game":"Boom the Ghost","table":"EventBTGSkillTable","name":"Skill","columns":[{"key":"id","label":"Id"},{"key":"manager_id","label":"Manager id"},{"key":"skill_type","label":"Skill type"},{"key":"skill_use_value","label":"Skill use value"}],"rows":[[1,1,"SkillA",2],[2,1,"SkillB",2],[101,2,"SkillA",2],[102,2,"SkillB",2]]}
