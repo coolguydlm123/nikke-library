@@ -99,7 +99,7 @@ const Minigames = (() => {
       m.charts[m.page.song] = r.ok ? await r.json() : { error: true };
     }
     if (m.page.kind === 'missions' && !m.missions) m.missions = await (await apiFetch('/api/tts/missions')).json();
-    if (m.page.kind === 'skins' && !m.skins) m.skins = await (await apiFetch('/api/tts/skins')).json();
+    if ((m.page.kind === 'skins' || m.page.kind === 'chart') && !m.skins) m.skins = await (await apiFetch('/api/tts/skins')).json();
     renderTree();
     ({ overview, songs: songsPage, chart: chartPage, missions: missionsPage, skins: skinsPage, help: helpPage })[m.page.kind]();
     $('#reader').scrollTop = 0;
@@ -221,7 +221,7 @@ const Minigames = (() => {
     $('#reader').innerHTML = head([m.tts.name, 'Songs'], esc(data.name),
       `${gameImg('tts', s?.cover, 'tts-album-cover')}<p class="album-desc">${esc(data.artist || '')}${album ? ` · <a href="${base}/songs/${album.id}">${esc(album.name)}</a>` : ''} · <a href="${base}/songs${album ? `/${album.id}` : ''}">back to songs</a></p>`) +
       '<div class="stage-body"><section class="card"><div id="tts-chart"></div></section></div>';
-    TtsChart.mount($('#tts-chart'), data, { difficulty: m.page.diff });
+    TtsChart.mount($('#tts-chart'), data, { difficulty: m.page.diff, skins: (m.skins || []).filter((k) => k.preview) });
   }
 
   function rewardText(r) {

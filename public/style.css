@@ -865,6 +865,8 @@ body.at-home .sidebar { display: none; }
 .tc-group button.is-on { background: color-mix(in srgb, var(--accent, #6fb4ff) 25%, transparent); outline: 0; }
 .tc-diffs .lv { border: 0; padding: 4px 10px; }
 .tc-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.tc-char { height: 44px; width: auto; border-radius: 6px; margin-left: auto; }
+.tc-skins select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
 .tc-info { margin-left: auto; font-variant-numeric: tabular-nums; }
 .tc-canvas { display: block; width: 100%; background: #15151a; border-radius: 10px; }
 .tc-seek { width: 100%; margin-top: 8px; }

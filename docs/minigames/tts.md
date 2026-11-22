@@ -257,6 +257,14 @@ Clicking a song's name or a difficulty level in the song table opens its note ch
 - Format: ticks are 48 per beat (192 per bar); tracks 3, 4, 6, 7 are the D F J K keys, track 5 the Space note, tracks 10 and 11 the shift notes; a note's `extra` field is `(hold length in ticks << 8) | low byte`.
 - Not verified in game: the left-to-right order of the four keys, which shift track is the left one, the hold length rule, and what the low byte of shift notes means. Judgement windows and scoring are still not in the data.
 
+## Chart notes (from `nikke-downloader/tts-charts.json`, shown by the site's chart viewer)
+
+Each chart is a list per track of `[tick, extra, tick, extra, ...]` (48 ticks per beat, 192 per bar). Tracks: 3, 4, 6, 7 = D F J K, 5 = Space, 10 and 11 = shift notes. Read from the data (349 charts):
+- **Hold:** `extra >= 256` means a hold lasting `extra >> 8` ticks (D F J K usually 48, up to 792; Space usually 96, up to 1,536; shift usually 48, up to 816).
+- **Swipe (shift notes):** the low byte of `extra` is two decimal digits, each 1-9: the swipe's start zone and end zone on a 1-9 scale. Track 10 always ends below its start, track 11 above (9,023 of 9,027 notes; 4 odd ones). 5 to 1 (track 10) and 5 to 9 (track 11) are the most common. Which way the scale runs on screen is not verified; the viewer draws zone 1 at the left edge, and the note sits on the side where the swipe ends.
+- **Hold ticks (the stars):** on D F J K, the low byte of `extra` is 1 for a hold tick and 0 for a plain tap. Every D F J K note that lies inside a hold of its own lane has it (5,440 of 5,440 in 349 charts), and no note outside every hold has it (none of about 125,800). Notes in a Space hold also have it (mostly the D lane: 98%). These are the stars drawn along a hold bar in the game: they are held with the bar, not tapped. Shift lanes never have a note inside their own hold (0 of 9,027), so shift hold bars carry no stars. A hold's end never coincides with a note of its lane, so the tail piece is not a note. Space notes also carry 1 sometimes (about 19% outside holds): meaning unknown.
+- **Not verified:** which shift track is the left lane (viewer default: track 10), the lane order, and what the other low-byte values on D F J K and Space (mostly 0 or 1) mean.
+
 ## Data sources
 
 | Table | Used for |
